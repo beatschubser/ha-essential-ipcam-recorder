@@ -40,7 +40,6 @@ jobs:
           python-version: "3.13"
       - name: Install Home Assistant test environment
         run: |
-          sudo apt-get update && sudo apt-get install -y ffmpeg libturbojpeg0
           pip install pytest-homeassistant-custom-component ha-ffmpeg av numpy PyTurboJPEG
       - name: Run tests
         run: |
