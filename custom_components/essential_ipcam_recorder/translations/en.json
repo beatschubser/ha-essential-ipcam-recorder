@@ -1,0 +1,101 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add camera",
+        "description": "Requires a camera stream with AAC audio for sound, see README.",
+        "data": {
+          "name": "Name",
+          "camera_entity": "Camera",
+          "folder": "Folder",
+          "person_sensors": "Person sensors",
+          "pet_sensors": "Pet sensors",
+          "motion_sensors": "Motion sensors"
+        },
+        "data_description": {
+          "camera_entity": "Camera entity to record. Its stream source is used unless a stream URL is set in the options.",
+          "folder": "Folder inside a Home Assistant media folder. Day folders, favorites and a temp folder are created inside.",
+          "person_sensors": "Highest priority for the file label.",
+          "pet_sensors": "Second priority for the file label.",
+          "motion_sensors": "Generic motion, lowest priority."
+        }
+      }
+    },
+    "error": {
+      "folder_not_in_media": "The folder must be inside a Home Assistant media folder.",
+      "no_sensors": "Select at least one sensor."
+    },
+    "abort": {
+      "already_configured": "This camera is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Recording settings",
+        "data": {
+          "person_sensors": "Person sensors",
+          "pet_sensors": "Pet sensors",
+          "motion_sensors": "Motion sensors",
+          "video_duration": "Maximum video length",
+          "lookback": "Lookback",
+          "post_motion": "Keep after last motion",
+          "snapshot_offset": "Still image after event",
+          "retention_days": "Keep recordings",
+          "rtsp_transport": "RTSP transport",
+          "use_wallclock_as_timestamps": "Use wallclock as timestamps",
+          "stream_url": "Stream URL (optional)",
+          "favorites_folder": "Favorites folder name",
+          "day_folder_format": "Day folder format"
+        },
+        "data_description": {
+          "person_sensors": "Highest priority for the file label.",
+          "pet_sensors": "Second priority for the file label.",
+          "motion_sensors": "Generic motion, lowest priority.",
+          "video_duration": "The camera is locked for new events for this time. Videos are trimmed afterwards.",
+          "lookback": "Seconds before the event. Keeps a stream running permanently. Starts at the previous keyframe. 0 = off.",
+          "post_motion": "Video ends this long after the last sensor switched off. 0 = never trim.",
+          "snapshot_offset": "Seconds after the event for the preview image.",
+          "retention_days": "Older recordings are deleted daily at 03:30. Favorites are kept. 0 = keep forever.",
+          "rtsp_transport": "Use tcp when the source is go2rtc.",
+          "use_wallclock_as_timestamps": "Fixes corrupted recordings from cameras with broken timestamps.",
+          "stream_url": "Overrides the camera's stream source, e.g. rtsp://127.0.0.1:8554/garden_hd?video=all&audio=aac",
+          "favorites_folder": "Sub folder for favorites, excluded from cleanup.",
+          "day_folder_format": "strftime format, e.g. %Y_%m_%d"
+        }
+      }
+    },
+    "error": {
+      "no_sensors": "Select at least one sensor."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "recording": {
+        "name": "Recording"
+      }
+    },
+    "sensor": {
+      "last_event": {
+        "name": "Last event"
+      }
+    }
+  },
+  "exceptions": {
+    "not_a_recording": {
+      "message": "This file is not a recording of a configured camera."
+    }
+  },
+  "services": {
+    "toggle_favorite": {
+      "name": "Toggle favorite",
+      "description": "Moves a recording into the favorites folder, or back into its day folder.",
+      "fields": {
+        "media_content_id": {
+          "name": "Media ID",
+          "description": "Media source ID of the image or video."
+        }
+      }
+    }
+  }
+}

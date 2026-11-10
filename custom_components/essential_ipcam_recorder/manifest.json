@@ -1,0 +1,13 @@
+{
+  "domain": "essential_ipcam_recorder",
+  "name": "Essential IP Cam Recorder",
+  "codeowners": ["@beatschubser"],
+  "config_flow": true,
+  "dependencies": ["camera", "ffmpeg", "frontend", "http", "stream", "websocket_api"],
+  "documentation": "https://github.com/beatschubser/ha-essential-ipcam-recorder",
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/beatschubser/ha-essential-ipcam-recorder/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}
