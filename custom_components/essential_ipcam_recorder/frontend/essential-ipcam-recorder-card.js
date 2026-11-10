@@ -10,7 +10,7 @@
  * Favoriten:  <Quelle>/<Favoritenordner>/<Datei>, verschoben über essential_ipcam_recorder.toggle_favorite
  */
 
-const KEC_VERSION = "0.1.0";
+const VERSION = "0.1.0";
 const KEC_DOMAIN = "essential_ipcam_recorder";
 const KEC_TAG = "essential-ipcam-recorder-card";
 
@@ -817,4 +817,4 @@ if (!window.customCards.some((c) => c.type === KEC_TAG)) {
   });
 }
 
-console.info(`%c ESSENTIAL-IPCAM-RECORDER-CARD %c ${KEC_VERSION} `, "background:#03a9f4;color:#fff", "");
+console.info(`%c ESSENTIAL-IPCAM-RECORDER-CARD %c ${VERSION} `, "background:#03a9f4;color:#fff", "");

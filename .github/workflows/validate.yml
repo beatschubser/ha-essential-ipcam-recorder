@@ -1,0 +1,66 @@
+name: Validate
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:  # used by release.yml, so a release only happens when everything passes
+
+jobs:
+  hassfest:
+    name: Home Assistant (hassfest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: home-assistant/actions/hassfest@master
+
+  tests:
+    name: Card and version checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check card syntax
+        run: node --check custom_components/essential_ipcam_recorder/frontend/essential-ipcam-recorder-card.js
+      - name: Check version consistency
+        run: |
+          base=custom_components/essential_ipcam_recorder
+          m=$(jq -r .version "$base/manifest.json")
+          p=$(sed -nE 's/^VERSION = "([^"]+)".*/\1/p' "$base/const.py")
+          c=$(sed -nE 's/^const VERSION = "([^"]+)".*/\1/p' "$base/frontend/essential-ipcam-recorder-card.js")
+          echo "manifest=$m const.py=$p card=$c"
+          [ "$m" = "$p" ] && [ "$m" = "$c" ] || { echo "::error::Version mismatch, use scripts/bump_version.py"; exit 1; }
+
+  pytest:
+    name: Home Assistant tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install Home Assistant test environment
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg libturbojpeg0
+          pip install pytest-homeassistant-custom-component ha-ffmpeg av numpy PyTurboJPEG
+      - name: Run tests
+        run: |
+          set -o pipefail
+          pytest -v --tb=short 2>&1 | tee pytest.log
+      - name: Test results as annotation
+        # the job log is not always reachable, the annotation is (notice when passed, error when failed)
+        if: always()
+        run: |
+          [ -f pytest.log ] || exit 0
+          level=$([ "${{ job.status }}" = "success" ] && echo notice || echo error)
+          python3 -c "import sys; t = open('pytest.log').read(); t = t[-8000:] if sys.argv[1] == 'error' else '\n'.join(l for l in t.splitlines() if ' PASSED' in l or ' FAILED' in l or 'passed' in l); print('::' + sys.argv[1] + ' title=pytest::' + t.replace('%', '%25').replace('\r', '').replace('\n', '%0A'))" "$level"
+
+  hacs:
+    name: HACS
+    # HACS can only read public repositories; skipped while the repository is private
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hacs/action@main
+        with:
+          category: integration
+          ignore: brands

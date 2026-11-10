@@ -1,0 +1,92 @@
+name: Release
+
+# Creates a GitHub release whenever the version in manifest.json changes on main.
+# Versions with a suffix (e.g. 0.2.0-beta.1) become pre-releases, which HACS only
+# offers to users who enabled beta versions for this repository.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - custom_components/essential_ipcam_recorder/manifest.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate
+    uses: ./.github/workflows/validate.yml
+
+  release:
+    name: Create release
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Read and check version
+        id: version
+        run: |
+          set -euo pipefail
+          base=custom_components/essential_ipcam_recorder
+          manifest=$(jq -r .version "$base/manifest.json")
+          python=$(sed -nE 's/^VERSION = "([^"]+)".*/\1/p' "$base/const.py")
+          card=$(sed -nE 's/^const VERSION = "([^"]+)".*/\1/p' "$base/frontend/essential-ipcam-recorder-card.js")
+          echo "manifest=$manifest const.py=$python card=$card"
+          if [ "$manifest" != "$python" ] || [ "$manifest" != "$card" ]; then
+            echo "::error::Version mismatch (manifest=$manifest, const.py=$python, card=$card). Use scripts/bump_version.py."
+            exit 1
+          fi
+          echo "version=$manifest" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$manifest" >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release v$manifest already exists, nothing to do."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [[ "$manifest" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write release notes
+        if: steps.version.outputs.exists == 'false'
+        run: |
+          set -euo pipefail
+          # Releases list everything since the last release, betas only since the last beta
+          if [ "${{ steps.version.outputs.prerelease }}" = "true" ]; then
+            previous=$(git describe --tags --abbrev=0 --match 'v*' HEAD 2>/dev/null || true)
+          else
+            previous=$(git describe --tags --abbrev=0 --match 'v*' --exclude 'v*-*' HEAD 2>/dev/null || true)
+          fi
+          range=${previous:+$previous..}HEAD
+          {
+            echo "## Changes"
+            echo
+            python3 scripts/release_notes.py "$range"
+            if [ -n "$previous" ]; then
+              echo
+              echo "**Full changelog:** https://github.com/${GITHUB_REPOSITORY}/compare/${previous}...v${{ steps.version.outputs.version }}"
+            fi
+          } > notes.md
+          cat notes.md
+
+      - name: Create release
+        if: steps.version.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=${{ steps.version.outputs.version }}
+          flags=()
+          if [ "${{ steps.version.outputs.prerelease }}" = "true" ]; then flags+=(--prerelease); fi
+          gh release create "v$version" --target "$GITHUB_SHA" --title "$version" --notes-file notes.md "${flags[@]}"
