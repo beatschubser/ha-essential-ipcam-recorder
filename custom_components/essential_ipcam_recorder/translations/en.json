@@ -34,6 +34,7 @@
       "init": {
         "title": "Recording settings",
         "data": {
+          "camera_entity": "Camera",
           "folder": "Folder",
           "person_sensors": "Person sensors",
           "pet_sensors": "Pet sensors",
@@ -50,6 +51,7 @@
           "day_folder_format": "Day folder format"
         },
         "data_description": {
+          "camera_entity": "Camera entity to record. A new stream is started after saving.",
           "folder": "Folder inside a Home Assistant media folder. Existing recordings are not moved.",
           "person_sensors": "Highest priority for the file label.",
           "pet_sensors": "Second priority for the file label.",
@@ -69,7 +71,8 @@
     },
     "error": {
       "no_sensors": "Select at least one sensor.",
-      "folder_not_in_media": "The folder must be inside a Home Assistant media folder."
+      "folder_not_in_media": "The folder must be inside a Home Assistant media folder.",
+      "camera_in_use": "This camera is already used by another entry."
     }
   },
   "entity": {

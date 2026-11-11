@@ -34,6 +34,7 @@
       "init": {
         "title": "Aufnahme-Einstellungen",
         "data": {
+          "camera_entity": "Kamera",
           "folder": "Ordner",
           "person_sensors": "Personen-Sensoren",
           "pet_sensors": "Tier-Sensoren",
@@ -50,6 +51,7 @@
           "day_folder_format": "Format Tagesordner"
         },
         "data_description": {
+          "camera_entity": "Kamera-Entität für die Aufnahme. Nach dem Speichern wird der Stream neu gestartet.",
           "folder": "Ordner innerhalb eines Home-Assistant-Medienordners. Vorhandene Aufnahmen werden nicht verschoben.",
           "person_sensors": "Höchste Priorität für die Bezeichnung.",
           "pet_sensors": "Zweite Priorität für die Bezeichnung.",
@@ -69,7 +71,8 @@
     },
     "error": {
       "no_sensors": "Mindestens einen Sensor auswählen.",
-      "folder_not_in_media": "Der Ordner muss innerhalb eines Home-Assistant-Medienordners liegen."
+      "folder_not_in_media": "Der Ordner muss innerhalb eines Home-Assistant-Medienordners liegen.",
+      "camera_in_use": "Diese Kamera wird bereits von einem anderen Eintrag genutzt."
     }
   },
   "entity": {

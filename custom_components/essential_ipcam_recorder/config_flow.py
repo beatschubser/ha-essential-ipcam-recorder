@@ -140,7 +140,13 @@ class IpCamRecorderOptionsFlow(OptionsFlow):
         errors: dict[str, str] = {}
         if user_input is not None:
             user_input[CONF_FOLDER] = os.path.normpath(user_input[CONF_FOLDER])
-            if folder_to_media_id(user_input[CONF_FOLDER], self.hass.config.media_dirs) is None:
+            camera = user_input[CONF_CAMERA]
+            if any(
+                entry.unique_id == camera and entry.entry_id != self.config_entry.entry_id
+                for entry in self.hass.config_entries.async_entries(DOMAIN)
+            ):
+                errors[CONF_CAMERA] = "camera_in_use"
+            elif folder_to_media_id(user_input[CONF_FOLDER], self.hass.config.media_dirs) is None:
                 errors[CONF_FOLDER] = "folder_not_in_media"
             elif not any(user_input.get(key) for key in SENSOR_KEYS):
                 errors["base"] = "no_sensors"
@@ -148,6 +154,10 @@ class IpCamRecorderOptionsFlow(OptionsFlow):
                 for key in SENSOR_KEYS:
                     user_input.setdefault(key, [])
                 user_input.setdefault(CONF_STREAM_URL, "")
+                if self.config_entry.unique_id != camera:
+                    self.hass.config_entries.async_update_entry(
+                        self.config_entry, unique_id=camera
+                    )
                 return self.async_create_entry(data=user_input)
         values = {
             **DEFAULT_OPTIONS,
@@ -157,6 +167,9 @@ class IpCamRecorderOptionsFlow(OptionsFlow):
         }
         schema = vol.Schema(
             {
+                vol.Required(CONF_CAMERA, default=values[CONF_CAMERA]): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="camera")
+                ),
                 vol.Required(CONF_FOLDER, default=values[CONF_FOLDER]): selector.TextSelector(),
                 **_sensor_fields(values),
                 **_option_fields(values),

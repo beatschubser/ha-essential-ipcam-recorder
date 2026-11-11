@@ -48,10 +48,12 @@ async def test_options_change_folder(hass: HomeAssistant) -> None:
     hass.config.media_dirs = {"local": "/media"}
     entry = MockConfigEntry(
         domain=DOMAIN,
+        unique_id="camera.garden",
         data={"camera_entity": "camera.garden", "folder": "/media/IP/Garden"},
         options={"motion_sensors": ["binary_sensor.m"]},
     )
     entry.add_to_hass(hass)
+    MockConfigEntry(domain=DOMAIN, unique_id="camera.other", data={"camera_entity": "camera.other", "folder": "/media/IP/Other"}).add_to_hass(hass)
     with patch(
         "custom_components.essential_ipcam_recorder.async_setup_entry", return_value=True
     ):
@@ -59,13 +61,20 @@ async def test_options_change_folder(hass: HomeAssistant) -> None:
         assert result["type"] is FlowResultType.FORM
 
         result = await hass.config_entries.options.async_configure(
-            result["flow_id"], {"folder": "/config/x", "motion_sensors": ["binary_sensor.m"]}
+            result["flow_id"], {"camera_entity": "camera.garden", "folder": "/config/x", "motion_sensors": ["binary_sensor.m"]}
         )
         assert result["errors"] == {"folder": "folder_not_in_media"}
 
         result = await hass.config_entries.options.async_configure(
-            result["flow_id"], {"folder": "/media/IP/Garten/", "motion_sensors": ["binary_sensor.m"]}
+            result["flow_id"], {"camera_entity": "camera.other", "folder": "/config/x", "motion_sensors": ["binary_sensor.m"]}
+        )
+        assert result["errors"] == {"camera_entity": "camera_in_use"}
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"camera_entity": "camera.new", "folder": "/media/IP/Garten/", "motion_sensors": ["binary_sensor.m"]}
         )
         await hass.async_block_till_done()
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options["folder"] == "/media/IP/Garten"
+    assert entry.options["camera_entity"] == "camera.new"
+    assert entry.unique_id == "camera.new"
