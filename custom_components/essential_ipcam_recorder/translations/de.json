@@ -34,6 +34,7 @@
       "init": {
         "title": "Aufnahme-Einstellungen",
         "data": {
+          "folder": "Ordner",
           "person_sensors": "Personen-Sensoren",
           "pet_sensors": "Tier-Sensoren",
           "motion_sensors": "Bewegungs-Sensoren",
@@ -49,6 +50,7 @@
           "day_folder_format": "Format Tagesordner"
         },
         "data_description": {
+          "folder": "Ordner innerhalb eines Home-Assistant-Medienordners. Vorhandene Aufnahmen werden nicht verschoben.",
           "person_sensors": "Höchste Priorität für die Bezeichnung.",
           "pet_sensors": "Zweite Priorität für die Bezeichnung.",
           "motion_sensors": "Allgemeine Bewegung, niedrigste Priorität.",
@@ -66,7 +68,8 @@
       }
     },
     "error": {
-      "no_sensors": "Mindestens einen Sensor auswählen."
+      "no_sensors": "Mindestens einen Sensor auswählen.",
+      "folder_not_in_media": "Der Ordner muss innerhalb eines Home-Assistant-Medienordners liegen."
     }
   },
   "entity": {

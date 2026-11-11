@@ -139,13 +139,27 @@ class IpCamRecorderOptionsFlow(OptionsFlow):
         """Show all settings."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            if not any(user_input.get(key) for key in SENSOR_KEYS):
+            user_input[CONF_FOLDER] = os.path.normpath(user_input[CONF_FOLDER])
+            if folder_to_media_id(user_input[CONF_FOLDER], self.hass.config.media_dirs) is None:
+                errors[CONF_FOLDER] = "folder_not_in_media"
+            elif not any(user_input.get(key) for key in SENSOR_KEYS):
                 errors["base"] = "no_sensors"
             else:
                 for key in SENSOR_KEYS:
                     user_input.setdefault(key, [])
                 user_input.setdefault(CONF_STREAM_URL, "")
                 return self.async_create_entry(data=user_input)
-        values = {**DEFAULT_OPTIONS, **self.config_entry.options, **(user_input or {})}
-        schema = vol.Schema({**_sensor_fields(values), **_option_fields(values)})
+        values = {
+            **DEFAULT_OPTIONS,
+            **self.config_entry.data,
+            **self.config_entry.options,
+            **(user_input or {}),
+        }
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_FOLDER, default=values[CONF_FOLDER]): selector.TextSelector(),
+                **_sensor_fields(values),
+                **_option_fields(values),
+            }
+        )
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)

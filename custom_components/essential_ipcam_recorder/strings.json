@@ -34,6 +34,7 @@
       "init": {
         "title": "Recording settings",
         "data": {
+          "folder": "Folder",
           "person_sensors": "Person sensors",
           "pet_sensors": "Pet sensors",
           "motion_sensors": "Motion sensors",
@@ -49,6 +50,7 @@
           "day_folder_format": "Day folder format"
         },
         "data_description": {
+          "folder": "Folder inside a Home Assistant media folder. Existing recordings are not moved.",
           "person_sensors": "Highest priority for the file label.",
           "pet_sensors": "Second priority for the file label.",
           "motion_sensors": "Generic motion, lowest priority.",
@@ -66,7 +68,8 @@
       }
     },
     "error": {
-      "no_sensors": "Select at least one sensor."
+      "no_sensors": "Select at least one sensor.",
+      "folder_not_in_media": "The folder must be inside a Home Assistant media folder."
     }
   },
   "entity": {
