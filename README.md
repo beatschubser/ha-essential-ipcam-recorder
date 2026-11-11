@@ -1,4 +1,8 @@
-# Essential IP Cam Recorder
+<p align="center">
+  <img src="custom_components/essential_ipcam_recorder/brand/icon.png" width="128" alt="Essential IP Cam Recorder">
+</p>
+
+<h1 align="center">Essential IP Cam Recorder</h1>
 
 > **Beta.** Works in daily use with Tapo cameras, but expect rough edges and breaking changes.
 
