@@ -14,7 +14,7 @@
         },
         "data_description": {
           "camera_entity": "Kamera-Entität für die Aufnahme. Ihre Stream-Quelle wird genutzt, außer in den Optionen ist eine Stream-URL gesetzt.",
-          "folder": "Ordner innerhalb eines Home-Assistant-Medienordners. Darin entstehen Tagesordner, Favoriten und ein Temp-Ordner.",
+          "folder": "Ordner innerhalb eines Home-Assistant-Medienordners. Darin entstehen Tagesordner und Favoriten.",
           "person_sensors": "Höchste Priorität für die Bezeichnung.",
           "pet_sensors": "Zweite Priorität für die Bezeichnung.",
           "motion_sensors": "Allgemeine Bewegung, niedrigste Priorität."

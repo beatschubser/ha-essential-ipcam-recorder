@@ -19,6 +19,8 @@ async def test_record_label_and_favorite(hass: HomeAssistant, tmp_path, hass_ws_
     stream = MagicMock()
 
     async def fake_record(path, duration, lookback):
+        assert os.path.basename(path).startswith("~")
+        assert os.path.dirname(path) == str(folder)
         with open(path, "wb") as f:
             f.write(b"video")
 
@@ -69,7 +71,7 @@ async def test_record_label_and_favorite(hass: HomeAssistant, tmp_path, hass_ws_
     assert data["label"] == "PERSON"
     assert data["trigger"] == "motion"
     assert os.path.exists(data["video_path"]) and os.path.exists(data["image_path"])
-    assert "/_temp/" not in data["video_path"]
+    assert not [n for n in os.listdir(folder) if n.startswith("~")]  # temp files renamed
 
     state = hass.states.get("sensor.garden_last_event")
     assert state is not None and state.attributes["label"] == "PERSON"

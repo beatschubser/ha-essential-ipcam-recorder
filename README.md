@@ -4,7 +4,7 @@
 
 <h1 align="center">Essential IP Cam Recorder</h1>
 
-> **Beta.** Works in daily use with Tapo cameras, but expect rough edges and breaking changes.
+> Tested in daily use with Tapo cameras. Feedback on other cameras is welcome.
 
 Event recordings for Home Assistant cameras: when a motion, person or pet sensor fires, the recorder saves a video with lookback, picks the most specific label, trims the video to the end of the motion, extracts a preview image and shows everything in a bundled timeline card.
 
@@ -78,13 +78,15 @@ All settings are available in the visual editor.
 <folder>/2026_11_10/2026-11-10_20-15-00_[PERSON].mp4
 <folder>/2026_11_10/2026-11-10_20-15-00_[PERSON].jpg
 <folder>/Favorites/...
-<folder>/_temp/...          running recordings
+<folder>/~2026-11-10_20-15-00_camera_garden.mp4   running recording (temporary)
 ```
 
 ## Notes
 
 - Audio is only recorded if the stream delivers AAC. Other formats are dropped by Home Assistant without a log entry.
 - H.265 streams record fine, but not every browser plays them.
+- While recording, files start with `~` and stay in the camera folder. When done they are renamed into the day folder. Leftovers (e.g. after a restart) are removed after 15 minutes.
+- The cleanup only deletes files named like events inside date-named day folders. Favorites and any other files or folders are never touched.
 - Lookback keeps a stream open permanently, which adds network load to the camera.
 
 ## License

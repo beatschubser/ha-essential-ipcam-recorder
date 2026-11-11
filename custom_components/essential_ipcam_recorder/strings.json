@@ -14,7 +14,7 @@
         },
         "data_description": {
           "camera_entity": "Camera entity to record. Its stream source is used unless a stream URL is set in the options.",
-          "folder": "Folder inside a Home Assistant media folder. Day folders, favorites and a temp folder are created inside.",
+          "folder": "Folder inside a Home Assistant media folder. Day folders and favorites are created inside.",
           "person_sensors": "Highest priority for the file label.",
           "pet_sensors": "Second priority for the file label.",
           "motion_sensors": "Generic motion, lowest priority."

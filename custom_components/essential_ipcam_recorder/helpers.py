@@ -15,6 +15,7 @@ from .const import (
     LABEL_MOTION,
     LABEL_PERSON,
     LABEL_PET,
+    LEGACY_TEMP_FOLDER,
     MEDIA_SOURCE_PREFIX,
 )
 
@@ -140,8 +141,13 @@ def move_event_files(stem: str, target: str) -> list[str]:
 EVENT_FILE_RE = re.compile(
     r"^(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_(\[(PERSON|PET|MOTION)\]|person|pet|motion)\.(jpg|mp4)$"
 )
-# Temp files of a recording: <camera>_<stamp>.mp4, plus .tmp (stream) and .cut.mp4 (trim)
+# Temp files of a recording in the camera folder: ~<time>_<camera>.mp4 / .jpg,
+# plus .tmp (written by the stream) and .cut.mp4 (trimming)
 TEMP_FILE_RE = re.compile(
+    r"^~\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_[a-z0-9_]+\.(mp4|jpg)(\.tmp|\.cut\.mp4)?$"
+)
+# Temp files of versions up to 0.1.1-beta.4 in <folder>/_temp: <camera>_<time>.mp4
+LEGACY_TEMP_FILE_RE = re.compile(
     r"^[a-z0-9_]+_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.mp4(\.tmp|\.cut\.mp4)?$"
 )
 SYNOLOGY_INDEX = "@eaDir"
@@ -217,20 +223,36 @@ def _remove_if_empty(day: str) -> None:
         return
 
 
-def cleanup_temp(temp_folder: str, max_age_minutes: float, keep: str | None = None) -> int:
-    """Delete leftover recording temp files older than max_age_minutes. Blocking.
+def cleanup_temp(folder: str, max_age_minutes: float, keep: str | None = None) -> int:
+    """Delete leftover temp files of interrupted recordings. Blocking.
 
-    Only files named like our temp files are touched, never folders or other files.
+    Only files directly in the camera folder named like our temp files (~...) are
+    touched, plus the old _temp folder, which is removed once it is empty.
+    keep: path prefix of the recording that is running right now.
     """
-    if not os.path.isdir(temp_folder) or os.path.islink(temp_folder):
+    deleted = _delete_matching(folder, TEMP_FILE_RE, max_age_minutes, keep)
+    legacy = os.path.join(folder, LEGACY_TEMP_FOLDER)
+    if os.path.isdir(legacy) and not os.path.islink(legacy):
+        deleted += _delete_matching(legacy, LEGACY_TEMP_FILE_RE, max_age_minutes, None)
+        try:
+            os.rmdir(legacy)  # only if empty
+        except OSError:
+            pass
+    return deleted
+
+
+def _delete_matching(
+    folder: str, pattern: re.Pattern[str], max_age_minutes: float, keep: str | None
+) -> int:
+    if not os.path.isdir(folder) or os.path.islink(folder):
         return 0
     limit = time.time() - max_age_minutes * 60
     deleted = 0
-    with os.scandir(temp_folder) as entries:
+    with os.scandir(folder) as entries:
         for entry in entries:
             if keep and entry.path.startswith(keep):
                 continue
-            if not TEMP_FILE_RE.match(entry.name) or not entry.is_file(follow_symlinks=False):
+            if not pattern.match(entry.name) or not entry.is_file(follow_symlinks=False):
                 continue
             try:
                 if entry.stat(follow_symlinks=False).st_mtime < limit:

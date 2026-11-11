@@ -67,8 +67,8 @@ from .const import (
     EVENT_SAVED,
     FILE_TIME_FORMAT,
     SIGNAL_UPDATE,
-    TEMP_FOLDER,
     TEMP_MAX_AGE_MINUTES,
+    TEMP_PREFIX,
 )
 from .helpers import (
     SensorState,
@@ -140,11 +140,6 @@ class IpCamRecorder:
     def favorites_folder(self) -> str:
         """Name of the favorites sub folder."""
         return str(self.config[CONF_FAVORITES_FOLDER]).strip("/") or "Favorites"
-
-    @property
-    def temp_folder(self) -> str:
-        """Temp folder for running recordings."""
-        return os.path.join(self.folder, TEMP_FOLDER)
 
     @property
     def media_id(self) -> str | None:
@@ -284,11 +279,13 @@ class IpCamRecorder:
         now = dt_util.now()
         stamp = now.strftime(FILE_TIME_FORMAT)
         duration = int(config[CONF_VIDEO_DURATION])
-        temp = os.path.join(self.temp_folder, f"{slugify(self.camera)}_{stamp}.mp4")
-        self._current_temp = temp
+        # Temp files live in the camera folder, the leading ~ marks them as temporary
+        temp_base = os.path.join(self.folder, f"{TEMP_PREFIX}{stamp}_{slugify(self.camera)}")
+        temp, temp_image = temp_base + ".mp4", temp_base + ".jpg"
+        self._current_temp = temp_base
         try:
             await self.hass.async_add_executor_job(
-                lambda: os.makedirs(self.temp_folder, exist_ok=True)
+                lambda: os.makedirs(self.folder, exist_ok=True)
             )
             try:
                 stream = await self._async_get_stream()
@@ -319,9 +316,11 @@ class IpCamRecorder:
                 # Still image at the event moment, counted from the end (lookback varies)
                 from_end = max(duration - float(config[CONF_SNAPSHOT_OFFSET]), 1)
                 has_image = await self._async_ffmpeg(
-                    ["-sseof", f"-{from_end}", "-i", temp, "-frames:v", "1", "-q:v", "2", image],
-                    image,
+                    ["-sseof", f"-{from_end}", "-i", temp, "-frames:v", "1", "-q:v", "2", temp_image],
+                    temp_image,
                 )
+                if has_image:
+                    await self.hass.async_add_executor_job(shutil.move, temp_image, image)
                 cut = seconds_to_cut(
                     self._states(self.all_sensors),
                     start,
@@ -406,6 +405,7 @@ class IpCamRecorder:
     # ---- cleanup -------------------------------------------------------
 
     async def _async_cleanup(self, _now: Any = None) -> None:
+        await self._async_cleanup_temp()
         days = float(self.config[CONF_RETENTION_DAYS])
         if days <= 0:
             return
@@ -420,5 +420,5 @@ class IpCamRecorder:
 
     async def _async_cleanup_temp(self, _now: Any = None) -> None:
         await self.hass.async_add_executor_job(
-            cleanup_temp, self.temp_folder, TEMP_MAX_AGE_MINUTES, self._current_temp
+            cleanup_temp, self.folder, TEMP_MAX_AGE_MINUTES, self._current_temp
         )

@@ -44,7 +44,8 @@ LABEL_PERSON = "PERSON"
 LABEL_PET = "PET"
 LABEL_MOTION = "MOTION"
 
-TEMP_FOLDER = "_temp"
+TEMP_PREFIX = "~"  # running recordings in the camera folder: ~<time>_<camera>.mp4
+LEGACY_TEMP_FOLDER = "_temp"  # used up to 0.1.1-beta.4, emptied and removed by the cleanup
 TEMP_MAX_AGE_MINUTES = 15
 CLEANUP_HOUR = 3
 CLEANUP_MINUTE = 30
