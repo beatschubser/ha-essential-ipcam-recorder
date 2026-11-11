@@ -16,7 +16,6 @@ from .const import (
     LABEL_PERSON,
     LABEL_PET,
     MEDIA_SOURCE_PREFIX,
-    TEMP_FOLDER,
 )
 
 MEDIA_SUFFIXES = (".jpg", ".mp4")
@@ -121,69 +120,122 @@ def favorite_target(
 
 
 def move_event_files(stem: str, target: str) -> list[str]:
-    """Move <stem>.jpg and <stem>.mp4 into target. Blocking."""
+    """Move <stem>.jpg and <stem>.mp4 into target. Blocking.
+
+    Never overwrites: a file that already exists in target is left untouched.
+    """
     os.makedirs(target, exist_ok=True)
     moved = []
     for suffix in MEDIA_SUFFIXES:
         src = stem + suffix
-        if os.path.exists(src):
-            dst = os.path.join(target, os.path.basename(src))
+        dst = os.path.join(target, os.path.basename(src))
+        if os.path.isfile(src) and not os.path.lexists(dst):
             shutil.move(src, dst)
             moved.append(dst)
     return moved
 
 
-def cleanup_folder(folder: str, favorites_folder: str, max_age_days: float) -> int:
-    """Delete media files older than max_age_days, keep favorites. Blocking.
+# Only files written by this integration (or the earlier YAML version) are ever deleted:
+#   2026-11-10_20-15-00_[PERSON].mp4 / .jpg   and old style  2026-11-10_20-15-00_person.mp4
+EVENT_FILE_RE = re.compile(
+    r"^(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_(\[(PERSON|PET|MOTION)\]|person|pet|motion)\.(jpg|mp4)$"
+)
+# Temp files of a recording: <camera>_<stamp>.mp4, plus .tmp (stream) and .cut.mp4 (trim)
+TEMP_FILE_RE = re.compile(
+    r"^[a-z0-9_]+_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.mp4(\.tmp|\.cut\.mp4)?$"
+)
+SYNOLOGY_INDEX = "@eaDir"
 
-    Also removes empty day folders. Returns the number of deleted files.
+
+def _is_day_folder(name: str, day_folder_format: str) -> bool:
+    try:
+        datetime.strptime(name, day_folder_format)
+    except ValueError:
+        return False
+    return True
+
+
+def _real_inside(path: str, folder: str) -> bool:
+    real, base = os.path.realpath(path), os.path.realpath(folder)
+    return os.path.commonpath([real, base]) == base and real != base
+
+
+def cleanup_folder(
+    folder: str, favorites_folder: str, max_age_days: float, day_folder_format: str
+) -> int:
+    """Delete old event files and empty day folders. Blocking.
+
+    Deliberately strict, so a badly chosen folder can never lose other data:
+    - only direct sub folders whose name is a date in day_folder_format
+      (favorites, temp, other cameras and anything else are never entered),
+    - no symlinks, nothing outside the camera folder,
+    - only files named like an event (EVENT_FILE_RE),
+    - only if both the time in the name and the file time are older than the limit,
+    - a day folder is only removed when it is empty (os.rmdir, never recursive);
+      Synology index folders (@eaDir) inside it are removed first.
+    Returns the number of deleted files.
     """
+    if max_age_days <= 0 or not os.path.isdir(folder):
+        return 0
     limit = time.time() - max_age_days * 86400
     deleted = 0
-    keep_dirs = {favorites_folder, TEMP_FOLDER}
-    for root, dirs, files in os.walk(folder):
-        if root == folder:
-            dirs[:] = [d for d in dirs if d not in keep_dirs and not d.startswith("@")]
-        else:
-            dirs[:] = [d for d in dirs if not d.startswith("@")]
-        for name in files:
-            if not name.lower().endswith((*MEDIA_SUFFIXES, ".tmp")):
-                continue
-            path = os.path.join(root, name)
-            try:
-                if os.path.getmtime(path) < limit:
-                    os.remove(path)
-                    deleted += 1
-            except FileNotFoundError:
-                continue
-    for root, dirs, files in os.walk(folder, topdown=False):
-        if root == folder or os.path.basename(root) in keep_dirs:
-            continue
-        if os.path.dirname(root) != folder:
-            continue
-        try:
-            entries = [e for e in os.listdir(root) if not e.startswith("@")]
-            if not entries:
-                shutil.rmtree(root, ignore_errors=True)
-        except FileNotFoundError:
-            continue
+    with os.scandir(folder) as days:
+        day_dirs = [
+            entry.path
+            for entry in days
+            if entry.is_dir(follow_symlinks=False)
+            and entry.name != favorites_folder
+            and _is_day_folder(entry.name, day_folder_format)
+            and _real_inside(entry.path, folder)
+        ]
+    for day in day_dirs:
+        with os.scandir(day) as files:
+            for entry in files:
+                match = EVENT_FILE_RE.match(entry.name)
+                if not match or not entry.is_file(follow_symlinks=False):
+                    continue
+                stamp = datetime.strptime(match.group(1), FILE_TIME_FORMAT).timestamp()
+                try:
+                    if stamp < limit and entry.stat(follow_symlinks=False).st_mtime < limit:
+                        os.remove(entry.path)
+                        deleted += 1
+                except FileNotFoundError:
+                    continue
+        _remove_if_empty(day)
     return deleted
 
 
+def _remove_if_empty(day: str) -> None:
+    try:
+        names = os.listdir(day)
+        if names == [SYNOLOGY_INDEX]:
+            index = os.path.join(day, SYNOLOGY_INDEX)
+            if os.path.isdir(index) and not os.path.islink(index):
+                shutil.rmtree(index, ignore_errors=True)
+        os.rmdir(day)  # fails (and keeps the folder) if anything is left
+    except OSError:
+        return
+
+
 def cleanup_temp(temp_folder: str, max_age_minutes: float, keep: str | None = None) -> int:
-    """Delete leftovers in the temp folder older than max_age_minutes. Blocking."""
-    if not os.path.isdir(temp_folder):
+    """Delete leftover recording temp files older than max_age_minutes. Blocking.
+
+    Only files named like our temp files are touched, never folders or other files.
+    """
+    if not os.path.isdir(temp_folder) or os.path.islink(temp_folder):
         return 0
     limit = time.time() - max_age_minutes * 60
     deleted = 0
-    for name in os.listdir(temp_folder):
-        path = os.path.join(temp_folder, name)
-        if keep and path.startswith(keep):
-            continue
-        try:
-            if os.path.isfile(path) and os.path.getmtime(path) < limit:
-                os.remove(path)
-                deleted += 1
-        except FileNotFoundError:
-            continue
+    with os.scandir(temp_folder) as entries:
+        for entry in entries:
+            if keep and entry.path.startswith(keep):
+                continue
+            if not TEMP_FILE_RE.match(entry.name) or not entry.is_file(follow_symlinks=False):
+                continue
+            try:
+                if entry.stat(follow_symlinks=False).st_mtime < limit:
+                    os.remove(entry.path)
+                    deleted += 1
+            except FileNotFoundError:
+                continue
     return deleted

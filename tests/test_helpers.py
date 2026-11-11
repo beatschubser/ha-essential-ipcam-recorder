@@ -67,28 +67,75 @@ def test_favorite_roundtrip(tmp_path):
     assert (day / (stem.name + ".mp4")).exists()
 
 
-def test_cleanup_keeps_favorites(tmp_path):
+def _old(path, days=10):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"x")
+    t = time.time() - days * 86400
+    os.utime(path, (t, t))
+    return path
+
+
+def test_cleanup_only_deletes_old_event_files(tmp_path):
+    folder = tmp_path / "IP Cam" / "Garden Cam"  # spaces on purpose
+    day = folder / "2026_01_01"
+    old_event = _old(day / "2026-01-01_10-00-00_[PERSON].mp4")
+    old_style = _old(day / "2026-01-01_10-05-00_motion.jpg")
+    foreign = _old(day / "holiday photo.jpg")
+    new_name_old_mtime = _old(day / f"{time.strftime('%Y-%m-%d_%H-%M-%S')}_[PET].jpg")
+    fav = _old(folder / "Favorites" / "2026-01-01_11-00-00_[PET].mp4")
+    temp = _old(folder / "_temp" / "2026-01-01_11-00-00_[PET].mp4")
+    other_cam = _old(folder / "Other" / "2026_01_01" / "2026-01-01_12-00-00_[PET].mp4")
+    not_a_day = _old(folder / "Archive" / "2026-01-01_12-00-00_[PET].mp4")
+
+    assert cleanup_folder(str(folder), "Favorites", 7, "%Y_%m_%d") == 2
+    assert not old_event.exists() and not old_style.exists()
+    for kept in (foreign, new_name_old_mtime, fav, temp, other_cam, not_a_day):
+        assert kept.exists(), kept
+    assert day.exists()  # not empty, so kept
+
+
+def test_cleanup_removes_only_empty_day_folders(tmp_path):
     folder = tmp_path / "Garden"
-    old_day = folder / "2026_01_01"
-    favorites = folder / "Favorites"
-    for d in (old_day, favorites):
-        d.mkdir(parents=True)
-    old = time.time() - 10 * 86400
-    for f in (old_day / "a.mp4", favorites / "b.mp4"):
-        f.write_bytes(b"x")
-        os.utime(f, (old, old))
-    assert cleanup_folder(str(folder), "Favorites", 7) == 1
-    assert not old_day.exists()
-    assert (favorites / "b.mp4").exists()
+    empty_day = folder / "2026_01_01"
+    _old(empty_day / "2026-01-01_10-00-00_[PERSON].mp4")
+    _old(empty_day / "@eaDir" / "thumb.jpg")
+    fresh_day = folder / "2026_01_02"
+    fresh = _old(fresh_day / "2026-01-02_10-00-00_[PERSON].mp4", days=1)
+    assert cleanup_folder(str(folder), "Favorites", 7, "%Y_%m_%d") == 1
+    assert not empty_day.exists()
+    assert fresh.exists()
+
+
+def test_cleanup_ignores_symlinks_and_disabled(tmp_path):
+    outside = tmp_path / "outside" / "2026_01_01"
+    victim = _old(outside / "2026-01-01_10-00-00_[PERSON].mp4")
+    folder = tmp_path / "Garden"
+    folder.mkdir()
+    (folder / "2026_01_01").symlink_to(outside, target_is_directory=True)
+    day = folder / "2026_01_02"
+    day.mkdir()
+    (day / "2026-01-02_10-00-00_[PERSON].mp4").symlink_to(victim)
+    assert cleanup_folder(str(folder), "Favorites", 7, "%Y_%m_%d") == 0
+    assert victim.exists()
+    assert cleanup_folder(str(folder), "Favorites", 0, "%Y_%m_%d") == 0
 
 
 def test_cleanup_temp(tmp_path):
     temp = tmp_path / "_temp"
-    temp.mkdir()
-    old = time.time() - 3600
-    for name in ("a.mp4.tmp", "b.mp4"):
-        f = temp / name
-        f.write_bytes(b"x")
-        os.utime(f, (old, old))
-    assert cleanup_temp(str(temp), 15, keep=str(temp / "b.mp4")) == 1
-    assert (temp / "b.mp4").exists()
+    ours = _old(temp / "camera_garden_2026-01-01_10-00-00.mp4", days=1)
+    ours_tmp = _old(temp / "camera_garden_2026-01-01_10-00-00.mp4.tmp", days=1)
+    current = _old(temp / "camera_garden_2026-01-01_11-00-00.mp4", days=1)
+    foreign = _old(temp / "notes.txt", days=1)
+    sub = _old(temp / "sub" / "camera_garden_2026-01-01_10-00-00.mp4", days=1)
+    assert cleanup_temp(str(temp), 15, keep=str(current)) == 2
+    assert not ours.exists() and not ours_tmp.exists()
+    assert current.exists() and foreign.exists() and sub.exists()
+
+
+def test_move_never_overwrites(tmp_path):
+    src = _old(tmp_path / "a" / "2026-01-01_10-00-00_[PET].jpg")
+    dst = tmp_path / "b" / src.name
+    dst.parent.mkdir()
+    dst.write_bytes(b"keep")
+    assert move_event_files(str(src)[:-4], str(dst.parent)) == []
+    assert dst.read_bytes() == b"keep" and src.exists()

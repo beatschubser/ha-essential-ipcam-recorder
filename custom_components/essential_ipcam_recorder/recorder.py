@@ -410,7 +410,11 @@ class IpCamRecorder:
         if days <= 0:
             return
         deleted = await self.hass.async_add_executor_job(
-            cleanup_folder, self.folder, self.favorites_folder, days
+            cleanup_folder,
+            self.folder,
+            self.favorites_folder,
+            days,
+            str(self.config[CONF_DAY_FOLDER_FORMAT]),
         )
         _LOGGER.debug("%s: deleted %s old files", self.name, deleted)
 

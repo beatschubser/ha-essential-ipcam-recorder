@@ -27,7 +27,13 @@ from .const import (
     SERVICE_TOGGLE_FAVORITE,
     WS_CAMERAS,
 )
-from .helpers import favorite_target, is_inside, media_id_to_path, move_event_files
+from .helpers import (
+    EVENT_FILE_RE,
+    favorite_target,
+    is_inside,
+    media_id_to_path,
+    move_event_files,
+)
 from .recorder import IpCamRecorder
 
 _LOGGER = logging.getLogger(__name__)
@@ -61,7 +67,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         recorder = next(
             (r for r in _recorders(hass) if path and is_inside(path, r.folder)), None
         )
-        if path is None or recorder is None:
+        if (
+            path is None
+            or recorder is None
+            or not EVENT_FILE_RE.match(os.path.basename(path))
+        ):
             raise ServiceValidationError(
                 translation_domain=DOMAIN, translation_key="not_a_recording"
             )
