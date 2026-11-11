@@ -126,15 +126,19 @@ def test_cleanup_temp(tmp_path):
     ours_tmp = _old(folder / "~2026-01-01_10-00-00_camera_garden.mp4.tmp", days=1)
     ours_jpg = _old(folder / "~2026-01-01_10-00-00_camera_garden.jpg", days=1)
     current = _old(folder / "~2026-01-01_11-00-00_camera_garden.mp4.tmp", days=1)
+    other_cam = _old(folder / "~2026-01-01_11-00-00_camera_other.mp4.cut.mp4", days=1)
     young = _old(folder / "~2026-01-01_12-00-00_camera_garden.mp4", days=0)
     foreign = _old(folder / "~notes.txt", days=1)
     event = _old(folder / "2026_01_01" / "~2026-01-01_10-00-00_camera_garden.mp4", days=1)
     legacy = _old(folder / "_temp" / "camera_garden_2026-01-01_10-00-00.mp4", days=1)
-    keep = str(folder / "~2026-01-01_11-00-00_camera_garden")
+    keep = [
+        str(folder / "~2026-01-01_11-00-00_camera_garden"),
+        str(folder / "~2026-01-01_11-00-00_camera_other"),
+    ]
     assert cleanup_temp(str(folder), 15, keep=keep) == 4
     assert not ours.exists() and not ours_tmp.exists() and not ours_jpg.exists()
     assert not legacy.exists() and not legacy.parent.exists()
-    for kept in (current, young, foreign, event):
+    for kept in (current, other_cam, young, foreign, event):
         assert kept.exists(), kept
 
 

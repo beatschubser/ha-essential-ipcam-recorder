@@ -419,6 +419,14 @@ class IpCamRecorder:
         _LOGGER.debug("%s: deleted %s old files", self.name, deleted)
 
     async def _async_cleanup_temp(self, _now: Any = None) -> None:
+        # Files of running recordings are never deleted, however long they take:
+        # skip those of every camera of this integration, not only this one.
+        running = [
+            entry.runtime_data._current_temp
+            for entry in self.hass.config_entries.async_entries(DOMAIN)
+            if isinstance(getattr(entry, "runtime_data", None), IpCamRecorder)
+            and entry.runtime_data._current_temp
+        ]
         await self.hass.async_add_executor_job(
-            cleanup_temp, self.folder, TEMP_MAX_AGE_MINUTES, self._current_temp
+            cleanup_temp, self.folder, TEMP_MAX_AGE_MINUTES, running
         )

@@ -223,12 +223,16 @@ def _remove_if_empty(day: str) -> None:
         return
 
 
-def cleanup_temp(folder: str, max_age_minutes: float, keep: str | None = None) -> int:
+def cleanup_temp(
+    folder: str, max_age_minutes: float, keep: list[str] | None = None
+) -> int:
     """Delete leftover temp files of interrupted recordings. Blocking.
 
     Only files directly in the camera folder named like our temp files (~...) are
     touched, plus the old _temp folder, which is removed once it is empty.
-    keep: path prefix of the recording that is running right now.
+    keep: path prefixes of the recordings that are running right now; their files are
+    never deleted, regardless of age. All other files must be untouched for
+    max_age_minutes (protects recordings that start while the cleanup runs).
     """
     deleted = _delete_matching(folder, TEMP_FILE_RE, max_age_minutes, keep)
     legacy = os.path.join(folder, LEGACY_TEMP_FOLDER)
@@ -242,7 +246,7 @@ def cleanup_temp(folder: str, max_age_minutes: float, keep: str | None = None) -
 
 
 def _delete_matching(
-    folder: str, pattern: re.Pattern[str], max_age_minutes: float, keep: str | None
+    folder: str, pattern: re.Pattern[str], max_age_minutes: float, keep: list[str] | None
 ) -> int:
     if not os.path.isdir(folder) or os.path.islink(folder):
         return 0
@@ -250,7 +254,7 @@ def _delete_matching(
     deleted = 0
     with os.scandir(folder) as entries:
         for entry in entries:
-            if keep and entry.path.startswith(keep):
+            if keep and any(entry.path.startswith(prefix) for prefix in keep):
                 continue
             if not pattern.match(entry.name) or not entry.is_file(follow_symlinks=False):
                 continue

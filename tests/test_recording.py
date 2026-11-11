@@ -1,12 +1,13 @@
+import time
+
 """End to end: sensor fires, video and image land in the day folder."""
 
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.essential_ipcam_recorder.const import DOMAIN, EVENT_SAVED
 
@@ -23,6 +24,11 @@ async def test_record_label_and_favorite(hass: HomeAssistant, tmp_path, hass_ws_
         assert os.path.dirname(path) == str(folder)
         with open(path, "wb") as f:
             f.write(b"video")
+        # a slow recording: file untouched for an hour, cleanup runs meanwhile
+        old = time.time() - 3600
+        os.utime(path, (old, old))
+        await entry.runtime_data._async_cleanup_temp()
+        assert os.path.exists(path)
 
     stream.async_record = AsyncMock(side_effect=fake_record)
     stream.start = AsyncMock()
