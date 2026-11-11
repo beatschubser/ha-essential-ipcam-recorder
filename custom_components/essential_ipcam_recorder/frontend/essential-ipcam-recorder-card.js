@@ -10,7 +10,7 @@
  * Favoriten:  <Quelle>/<Favoritenordner>/<Datei>, verschoben über essential_ipcam_recorder.toggle_favorite
  */
 
-const VERSION = "0.1.1-beta.4";
+const VERSION = "1.0.0";
 const KEC_DOMAIN = "essential_ipcam_recorder";
 const KEC_TAG = "essential-ipcam-recorder-card";
 
