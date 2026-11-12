@@ -143,6 +143,7 @@ class KecLader {
       this.ids.add(k.media_content_id);
       this.items.push({
         id: k.media_content_id,
+        key: `${src.name}|${stamm}`, // stable, unlike the path (favorites are moved)
         ts,
         quelle: src.name,
         src,
@@ -253,9 +254,9 @@ class KameraEventCard extends HTMLElement {
       quelle: quelleStart || null,
     };
     this._lader = null;
-    this._heroId = null;
-    this._auswahl = null; // id of the event shown in the large player, null = latest
-    this._neuestesId = null;
+    this._heroKey = null; // event shown in the large player
+    this._auswahl = null; // key of a chosen event, null = the latest
+    this._neuestesKey = null;
     this._signatur = null;
     if (!this._card) this._aufbauen();
     this._card.header = this._config.title || undefined;
@@ -412,13 +413,14 @@ class KameraEventCard extends HTMLElement {
 
   /* Video-Quelle setzen. Holt die signierte URL frisch und erneuert sie, wenn sie
      beim Abspielen alt ist oder das Video hängen bleibt (abgelaufene Signatur). */
-  async _videoAnbinden(video, id) {
+  async _videoAnbinden(video, quelle) {
+    const id = typeof quelle === "function" ? quelle : () => quelle;
     let geholt = 0;
     let versuche = 0;
     let haenger = null;
     const setzen = async (weiterspielen) => {
       const t = video.currentTime || 0;
-      const url = await this._url(id, true);
+      const url = await this._url(id(), true);
       geholt = Date.now();
       if (t > 0 || weiterspielen) {
         video.addEventListener("loadedmetadata", () => {
@@ -503,13 +505,13 @@ class KameraEventCard extends HTMLElement {
     const liste = alle.slice(0, this._limit);
     const signatur = `${this._auswahl}|${this._filter.typ}/${this._filter.quelle}|${liste.map((e) => `${e.id}${e.video ? "+" : ""}${e.fav ? "*" : ""}`).join(";")}|${this._lader.moeglich || alle.length > liste.length}`;
     if (signatur === this._signatur) return;
-    const neuesEvent = !!(liste[0] && this._neuestesId && liste[0].id !== this._neuestesId);
-    if (!erzwingen && this._heroSpielt() && (neuesEvent || !liste.some((e) => e.id === this._heroId))) {
+    const neuesEvent = !!(liste[0] && this._neuestesKey && liste[0].key !== this._neuestesKey);
+    if (!erzwingen && this._heroSpielt() && (neuesEvent || !liste.some((e) => e.key === this._heroKey))) {
       this._nachholen = true; // neues Event, aber oben läuft gerade ein Video
       return;
     }
     if (neuesEvent) this._auswahl = null; // a new event brings the large player back to the latest
-    if (this._auswahl && !liste.some((e) => e.id === this._auswahl)) this._auswahl = null;
+    if (this._auswahl && !liste.some((e) => e.key === this._auswahl)) this._auswahl = null;
     const urls = await Promise.all(liste.map((e) => this._url(e.bild).catch(() => null)));
     this._signatur = signatur;
     this._nachholen = false;
@@ -517,8 +519,8 @@ class KameraEventCard extends HTMLElement {
     this._zeichneFilter();
     if (liste.length === 0) {
       this._heroEl.replaceChildren();
-      this._heroId = null;
-      this._neuestesId = null;
+      this._heroKey = null;
+      this._neuestesKey = null;
       this._auswahl = null;
       this._heroStoppen();
       this._listeEl.replaceChildren();
@@ -528,15 +530,14 @@ class KameraEventCard extends HTMLElement {
       return;
     }
     this._statusEl.style.display = "none";
-    this._neuestesId = liste[0].id;
-    const heroIndex = this._auswahl ? liste.findIndex((e) => e.id === this._auswahl) : 0;
-    const gewaehlt = heroIndex > 0;
-    if (liste[heroIndex].id !== this._heroId || gewaehlt !== this._heroGewaehlt) {
-      this._zeichneHero(liste[heroIndex], urls[heroIndex], gewaehlt);
-    }
-    // with a selection the latest moves to the top of the list, the selected entry is highlighted
-    if (gewaehlt) this._zeichneListe(liste, urls, liste[heroIndex].id);
-    else this._zeichneListe(liste.slice(1), urls.slice(1), null);
+    // One rule: the large player shows the chosen event or the latest, the list always
+    // shows every event and highlights the one in the large player.
+    this._neuestesKey = liste[0].key;
+    const i = Math.max(0, liste.findIndex((e) => e.key === this._auswahl));
+    const hero = liste[i];
+    if (hero.key !== this._heroKey) this._zeichneHero(hero, urls[i], i > 0);
+    else this._heroAktualisieren(hero);
+    this._zeichneListe(liste, urls, hero.key);
     const mehrMoeglich = this._lader.moeglich || alle.length > liste.length;
     this._mehrEl.style.display = mehrMoeglich ? "" : "none";
     this._mehrEl.disabled = false;
@@ -649,15 +650,15 @@ class KameraEventCard extends HTMLElement {
 
   _zeichneHero(e, bildUrl, gewaehlt = false) {
     const typ = this._typ(e.kennung);
-    this._heroId = e.id;
-    this._heroGewaehlt = gewaehlt;
+    this._heroKey = e.key;
+    this._heroEvent = e;
     this._heroStoppen();
     const medien = kecEl("div", { class: "hero-media" });
     if (bildUrl) medien.append(kecEl("img", { src: bildUrl, alt: `${e.quelle}: ${typ.name}` }));
     if (e.video) {
       const start = (ev) => {
         ev.stopPropagation();
-        this._heroAbspielen(e, bildUrl, medien);
+        this._heroAbspielen(this._heroEvent, bildUrl, medien);
       };
       medien.append(kecEl("button", { class: "hero-play", "aria-label": this._t("play"), onclick: start }, [
         kecEl("ha-icon", { icon: "mdi:play" }),
@@ -680,6 +681,15 @@ class KameraEventCard extends HTMLElement {
     this._heroEl.replaceChildren(wrap, info, kecEl("div", { class: "trenner" }));
   }
 
+  /* Same event, new data (e.g. moved to favorites): only swap the lock button,
+     a running video keeps playing. */
+  _heroAktualisieren(e) {
+    this._heroEvent = e;
+    const alt = this._heroEl.querySelector(".hero-wrap > .stern");
+    const neu = this._stern(e);
+    if (alt && neu) alt.replaceWith(neu);
+  }
+
   _imHeroAbspielen() {
     const modus = String(this._config.play_in_hero || "wide");
     if (modus === "always") return true;
@@ -692,10 +702,9 @@ class KameraEventCard extends HTMLElement {
       this._oeffnen(e, bildUrl);
       return;
     }
-    const istNeuestes = e.id === this._neuestesId;
-    this._auswahl = istNeuestes ? null : e.id;
+    this._auswahl = e.key === this._neuestesKey ? null : e.key;
     this._signatur = null;
-    this._heroId = null; // always redraw, then start the video
+    this._heroKey = null; // always redraw, then start the video
     await this._zeichnen(true);
     const medien = this._heroEl.querySelector(".hero-media");
     if (e.video && medien) this._heroAbspielen(e, bildUrl, medien);
@@ -712,7 +721,8 @@ class KameraEventCard extends HTMLElement {
     if (this._heroVideo) return;
     try {
       const video = kecEl("video", { controls: true, playsinline: true, preload: "auto", poster: bildUrl || undefined });
-      await this._videoAnbinden(video, e.video);
+      // the file may move while playing (favorite), so always ask for the current path
+      await this._videoAnbinden(video, () => (this._heroEvent && this._heroEvent.key === e.key ? this._heroEvent : e).video);
       this._heroVideo = video;
       const weiter = () => { if (this._nachholen) this._zeichnen(); };
       video.addEventListener("pause", weiter);
@@ -728,7 +738,7 @@ class KameraEventCard extends HTMLElement {
     }
   }
 
-  _zeichneListe(liste, urls, gewaehltId) {
+  _zeichneListe(liste, urls, heroKey) {
     const teile = [];
     let letzterTag = null;
     liste.forEach((e, i) => {
@@ -745,7 +755,7 @@ class KameraEventCard extends HTMLElement {
       ]);
       const icon = kecEl("ha-icon", { class: "typicon", icon: typ.icon });
       icon.style.setProperty("--c", typ.color);
-      const zeile = kecEl("button", { class: "zeile", "aria-label": `${titel}, ${this._wann(e.ts)}`, "aria-current": e.id === gewaehltId ? "true" : undefined, onclick: () => this._auswaehlen(e, urls[i]) }, [
+      const zeile = kecEl("button", { class: "zeile", "aria-label": `${titel}, ${this._wann(e.ts)}`, "aria-current": e.key === heroKey ? "true" : undefined, onclick: () => this._auswaehlen(e, urls[i]) }, [
         thumb,
         icon,
         kecEl("div", { class: "zeile-text" }, [
@@ -753,7 +763,7 @@ class KameraEventCard extends HTMLElement {
           kecEl("span", { class: "zeile-zeit", text: this._wann(e.ts) }),
         ]),
       ]);
-      teile.push(kecEl("div", { class: `zeile-wrap${e.id === gewaehltId ? " gewaehlt" : ""}` }, [zeile, this._stern(e)]));
+      teile.push(kecEl("div", { class: `zeile-wrap${e.key === heroKey ? " gewaehlt" : ""}` }, [zeile, this._stern(e)]));
     });
     this._listeEl.replaceChildren(...teile);
   }
