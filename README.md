@@ -15,7 +15,7 @@ Event recordings for Home Assistant cameras: when a motion, person or pet sensor
 - Trims the video to the last motion plus a configurable tail
 - Preview image extracted from the video
 - Day folders, favorites folder (kept forever), daily cleanup
-- Timeline card with inline player, filters by camera and type, favorites lock
+- Timeline card with a large player (also for list entries on wide cards), filters by camera and type, favorites lock
 - Entities per camera: `Recording` and `Last event`, plus the event `essential_ipcam_recorder_event_saved` for your own automations
 
 ## Requirements
@@ -70,7 +70,7 @@ max_items: 10
 default_type: PERSON
 ```
 
-All settings are available in the visual editor.
+`play_in_hero` decides where list videos play: `wide` (default, large player on cards from `hero_min_width` = 600 px, overlay on narrow cards), `always` or `never` (overlay). All settings are available in the visual editor.
 
 ## Files
 

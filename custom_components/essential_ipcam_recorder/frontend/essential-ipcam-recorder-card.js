@@ -26,6 +26,8 @@ const KEC_DEFAULTS = {
   default_type: "PERSON",
   default_camera: "",
   favorites_folder: "Favorites",
+  play_in_hero: "wide", // "always", "wide" (cards from hero_min_width on, else overlay), "never"
+  hero_min_width: 600,
   sources: [],
   types: {
     PERSON: { icon: "mdi:account", color: "#f5b54a" },
@@ -47,6 +49,9 @@ const KEC_TEXT = {
     f_default_type: "Initial type filter", f_default_camera: "Initial camera filter",
     f_favorites_folder: "Favorites folder (custom sources only)", f_sources: "Custom sources (empty = recorder cameras)",
     f_types: "Event types (label: name, icon, color)",
+    back_to_latest: "Back to latest",
+    f_play_in_hero: "Play list videos in the large player", f_hero_min_width: "Large player: minimum card width",
+    hero_always: "Always", hero_wide: "On wide cards only", hero_never: "Never (overlay)",
   },
   de: {
     type_PERSON: "Person", type_PET: "Tier", type_MOTION: "Bewegung", event: "Event",
@@ -60,6 +65,9 @@ const KEC_TEXT = {
     f_default_type: "Start-Filter Typ", f_default_camera: "Start-Filter Kamera",
     f_favorites_folder: "Favoriten-Ordner (nur bei eigenen Quellen)", f_sources: "Eigene Quellen (leer = Kameras der Integration)",
     f_types: "Eventtypen (Kennung: name, icon, color)",
+    back_to_latest: "Zurück zum neuesten",
+    f_play_in_hero: "Videos der Liste im großen Player abspielen", f_hero_min_width: "Großer Player: Mindestbreite der Karte",
+    hero_always: "Immer", hero_wide: "Nur auf breiten Karten", hero_never: "Nie (Overlay)",
   },
 };
 
@@ -76,8 +84,9 @@ const KEC_BILD = /\.(jpe?g|png)$/i;
 const KEC_VIDEO = /\.mp4$/i;
 const KEC_ZEIT = /(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})/;
 
+// hidden: system folders, temp files of running recordings (~...)
 function kecVersteckt(titel) {
-  return /^[@._]/.test(titel);
+  return /^[@._~]/.test(titel);
 }
 
 function kecZeitstempel(name) {
@@ -124,10 +133,10 @@ class KecLader {
   _hinzufuegen(kinder, src, fav = false) {
     const videos = new Map();
     for (const k of kinder) {
-      if (!k.can_expand && KEC_VIDEO.test(k.title)) videos.set(k.title.replace(KEC_VIDEO, ""), k.media_content_id);
+      if (!k.can_expand && !kecVersteckt(k.title) && KEC_VIDEO.test(k.title)) videos.set(k.title.replace(KEC_VIDEO, ""), k.media_content_id);
     }
     for (const k of kinder) {
-      if (k.can_expand || !KEC_BILD.test(k.title) || this.ids.has(k.media_content_id)) continue;
+      if (k.can_expand || kecVersteckt(k.title) || !KEC_BILD.test(k.title) || this.ids.has(k.media_content_id)) continue;
       const stamm = k.title.replace(KEC_BILD, "");
       const ts = kecZeitstempel(stamm);
       if (ts === null) continue;
@@ -245,6 +254,8 @@ class KameraEventCard extends HTMLElement {
     };
     this._lader = null;
     this._heroId = null;
+    this._auswahl = null; // id of the event shown in the large player, null = latest
+    this._neuestesId = null;
     this._signatur = null;
     if (!this._card) this._aufbauen();
     this._card.header = this._config.title || undefined;
@@ -324,6 +335,8 @@ class KameraEventCard extends HTMLElement {
         display: flex; align-items: center; justify-content: center; --mdc-icon-size: 34px;
       }
       .hero-info { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px 16px; }
+      .hero-aktionen { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+      .zeile-wrap.gewaehlt { background: color-mix(in srgb, var(--primary-color) 14%, transparent); box-shadow: inset 4px 0 0 var(--primary-color); }
       .hero-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
       .hero-quelle { font-size: 20px; font-weight: 500; }
       .sek { font-size: 14px; color: var(--secondary-text-color); }
@@ -480,6 +493,7 @@ class KameraEventCard extends HTMLElement {
 
   _filtern(aenderung) {
     this._filter = { ...this._filter, ...aenderung };
+    this._auswahl = null;
     this._limit = Number(this._config.max_items) || 10;
     this._aktualisieren(false, true);
   }
@@ -487,12 +501,15 @@ class KameraEventCard extends HTMLElement {
   async _zeichnen(erzwingen = false) {
     const alle = this._lader.gefiltert(this._filter);
     const liste = alle.slice(0, this._limit);
-    const signatur = `${this._filter.typ}/${this._filter.quelle}|${liste.map((e) => `${e.id}${e.video ? "+" : ""}${e.fav ? "*" : ""}`).join(";")}|${this._lader.moeglich || alle.length > liste.length}`;
+    const signatur = `${this._auswahl}|${this._filter.typ}/${this._filter.quelle}|${liste.map((e) => `${e.id}${e.video ? "+" : ""}${e.fav ? "*" : ""}`).join(";")}|${this._lader.moeglich || alle.length > liste.length}`;
     if (signatur === this._signatur) return;
-    if (!erzwingen && this._heroSpielt() && (!liste[0] || liste[0].id !== this._heroId)) {
+    const neuesEvent = !!(liste[0] && this._neuestesId && liste[0].id !== this._neuestesId);
+    if (!erzwingen && this._heroSpielt() && (neuesEvent || !liste.some((e) => e.id === this._heroId))) {
       this._nachholen = true; // neues Event, aber oben läuft gerade ein Video
       return;
     }
+    if (neuesEvent) this._auswahl = null; // a new event brings the large player back to the latest
+    if (this._auswahl && !liste.some((e) => e.id === this._auswahl)) this._auswahl = null;
     const urls = await Promise.all(liste.map((e) => this._url(e.bild).catch(() => null)));
     this._signatur = signatur;
     this._nachholen = false;
@@ -501,6 +518,8 @@ class KameraEventCard extends HTMLElement {
     if (liste.length === 0) {
       this._heroEl.replaceChildren();
       this._heroId = null;
+      this._neuestesId = null;
+      this._auswahl = null;
       this._heroStoppen();
       this._listeEl.replaceChildren();
       this._mehrEl.style.display = "none";
@@ -509,8 +528,15 @@ class KameraEventCard extends HTMLElement {
       return;
     }
     this._statusEl.style.display = "none";
-    if (liste[0].id !== this._heroId) this._zeichneHero(liste[0], urls[0]);
-    this._zeichneListe(liste.slice(1), urls.slice(1));
+    this._neuestesId = liste[0].id;
+    const heroIndex = this._auswahl ? liste.findIndex((e) => e.id === this._auswahl) : 0;
+    const gewaehlt = heroIndex > 0;
+    if (liste[heroIndex].id !== this._heroId || gewaehlt !== this._heroGewaehlt) {
+      this._zeichneHero(liste[heroIndex], urls[heroIndex], gewaehlt);
+    }
+    // with a selection the latest moves to the top of the list, the selected entry is highlighted
+    if (gewaehlt) this._zeichneListe(liste, urls, liste[heroIndex].id);
+    else this._zeichneListe(liste.slice(1), urls.slice(1), null);
     const mehrMoeglich = this._lader.moeglich || alle.length > liste.length;
     this._mehrEl.style.display = mehrMoeglich ? "" : "none";
     this._mehrEl.disabled = false;
@@ -621,9 +647,10 @@ class KameraEventCard extends HTMLElement {
     this._heroVideo = null;
   }
 
-  _zeichneHero(e, bildUrl) {
+  _zeichneHero(e, bildUrl, gewaehlt = false) {
     const typ = this._typ(e.kennung);
     this._heroId = e.id;
+    this._heroGewaehlt = gewaehlt;
     this._heroStoppen();
     const medien = kecEl("div", { class: "hero-media" });
     if (bildUrl) medien.append(kecEl("img", { src: bildUrl, alt: `${e.quelle}: ${typ.name}` }));
@@ -644,10 +671,41 @@ class KameraEventCard extends HTMLElement {
         kecEl("span", { class: "hero-quelle", text: e.quelle }),
         kecEl("span", { class: "sek", text: this._wann(e.ts) }),
       ]),
-      this._typChip(typ),
+      kecEl("div", { class: "hero-aktionen" }, [
+        gewaehlt ? kecEl("button", { class: "chipbtn", text: this._t("back_to_latest"), onclick: () => this._zumNeuesten() }) : null,
+        this._typChip(typ),
+      ]),
     ]);
     const wrap = kecEl("div", { class: "hero-wrap" }, [medien, this._stern(e)]);
     this._heroEl.replaceChildren(wrap, info, kecEl("div", { class: "trenner" }));
+  }
+
+  _imHeroAbspielen() {
+    const modus = String(this._config.play_in_hero || "wide");
+    if (modus === "always") return true;
+    if (modus === "never") return false;
+    return this.getBoundingClientRect().width >= (Number(this._config.hero_min_width) || 600);
+  }
+
+  async _auswaehlen(e, bildUrl) {
+    if (!this._imHeroAbspielen()) {
+      this._oeffnen(e, bildUrl);
+      return;
+    }
+    const istNeuestes = e.id === this._neuestesId;
+    this._auswahl = istNeuestes ? null : e.id;
+    this._signatur = null;
+    this._heroId = null; // always redraw, then start the video
+    await this._zeichnen(true);
+    const medien = this._heroEl.querySelector(".hero-media");
+    if (e.video && medien) this._heroAbspielen(e, bildUrl, medien);
+    this._heroEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  _zumNeuesten() {
+    this._auswahl = null;
+    this._signatur = null;
+    this._zeichnen(true);
   }
 
   async _heroAbspielen(e, bildUrl, medien) {
@@ -670,7 +728,7 @@ class KameraEventCard extends HTMLElement {
     }
   }
 
-  _zeichneListe(liste, urls) {
+  _zeichneListe(liste, urls, gewaehltId) {
     const teile = [];
     let letzterTag = null;
     liste.forEach((e, i) => {
@@ -687,7 +745,7 @@ class KameraEventCard extends HTMLElement {
       ]);
       const icon = kecEl("ha-icon", { class: "typicon", icon: typ.icon });
       icon.style.setProperty("--c", typ.color);
-      const zeile = kecEl("button", { class: "zeile", "aria-label": `${titel}, ${this._wann(e.ts)}`, onclick: () => this._oeffnen(e, urls[i]) }, [
+      const zeile = kecEl("button", { class: "zeile", "aria-label": `${titel}, ${this._wann(e.ts)}`, "aria-current": e.id === gewaehltId ? "true" : undefined, onclick: () => this._auswaehlen(e, urls[i]) }, [
         thumb,
         icon,
         kecEl("div", { class: "zeile-text" }, [
@@ -695,7 +753,7 @@ class KameraEventCard extends HTMLElement {
           kecEl("span", { class: "zeile-zeit", text: this._wann(e.ts) }),
         ]),
       ]);
-      teile.push(kecEl("div", { class: "zeile-wrap" }, [zeile, this._stern(e)]));
+      teile.push(kecEl("div", { class: `zeile-wrap${e.id === gewaehltId ? " gewaehlt" : ""}` }, [zeile, this._stern(e)]));
     });
     this._listeEl.replaceChildren(...teile);
   }
@@ -759,6 +817,8 @@ const KEC_SCHEMA = [
   { name: "show_camera_filter", selector: { boolean: {} } },
   { name: "default_type", selector: { text: {} } },
   { name: "default_camera", selector: { text: {} } },
+  { name: "play_in_hero", selector: { select: { mode: "dropdown", options: ["always", "wide", "never"] } } },
+  { name: "hero_min_width", selector: { number: { min: 200, max: 2000, mode: "box", unit_of_measurement: "px" } } },
   { name: "favorites_folder", selector: { text: {} } },
   { name: "sources", selector: { object: {} } },
   { name: "types", selector: { object: {} } },
@@ -797,6 +857,9 @@ class KameraEventCardEditor extends HTMLElement {
       }
       if (f.name === "default_camera") {
         return { name: f.name, selector: { select: { mode: "dropdown", options: [{ value: "", label: kecT(this._hass, "all_cameras") }, ...kameras.map((k) => ({ value: k, label: k }))] } } };
+      }
+      if (f.name === "play_in_hero") {
+        return { name: f.name, selector: { select: { mode: "dropdown", options: ["always", "wide", "never"].map((v) => ({ value: v, label: kecT(this._hass, `hero_${v}`) })) } } };
       }
       return f;
     });
