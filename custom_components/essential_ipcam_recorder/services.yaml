@@ -5,3 +5,11 @@ toggle_favorite:
       example: "media-source://media_source/local/IP_Cam/Garden/2026_11_10/2026-11-10_20-15-00_[PERSON].jpg"
       selector:
         text:
+
+delete_event:
+  fields:
+    media_content_id:
+      required: true
+      example: "media-source://media_source/local/IP_Cam/Garden/2026_11_10/2026-11-10_20-15-00_[PERSON].jpg"
+      selector:
+        text:

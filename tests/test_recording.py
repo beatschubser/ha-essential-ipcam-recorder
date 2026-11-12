@@ -1,5 +1,9 @@
 import time
 
+import pytest
+from homeassistant.core import Context
+from homeassistant.exceptions import ServiceValidationError, Unauthorized
+
 """End to end: sensor fires, video and image land in the day folder."""
 
 import os
@@ -12,7 +16,9 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.essential_ipcam_recorder.const import DOMAIN, EVENT_SAVED
 
 
-async def test_record_label_and_favorite(hass: HomeAssistant, tmp_path, hass_ws_client) -> None:
+async def test_record_label_and_favorite(
+    hass: HomeAssistant, tmp_path, hass_ws_client, hass_read_only_user
+) -> None:
     hass.config.media_dirs = {"local": str(tmp_path)}
     hass.config.allowlist_external_dirs = {str(tmp_path)}
     folder = tmp_path / "Garden"
@@ -98,5 +104,31 @@ async def test_record_label_and_favorite(hass: HomeAssistant, tmp_path, hass_ws_
         DOMAIN, "toggle_favorite", {"media_content_id": fav_id}, blocking=True
     )
     assert os.path.exists(data["video_path"])
+
+    # delete: protected events are refused, day folder events are deleted (image + video)
+    await hass.services.async_call(
+        DOMAIN, "toggle_favorite", {"media_content_id": data["image"]}, blocking=True
+    )
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN, "delete_event", {"media_content_id": fav_id}, blocking=True
+        )
+    assert (folder / "Protected" / name).exists()
+    await hass.services.async_call(
+        DOMAIN, "toggle_favorite", {"media_content_id": fav_id}, blocking=True
+    )
+    with pytest.raises(Unauthorized):
+        await hass.services.async_call(
+            DOMAIN,
+            "delete_event",
+            {"media_content_id": data["image"]},
+            blocking=True,
+            context=Context(user_id=hass_read_only_user.id),
+        )
+    assert os.path.exists(data["image_path"])
+    await hass.services.async_call(
+        DOMAIN, "delete_event", {"media_content_id": data["image"]}, blocking=True
+    )
+    assert not os.path.exists(data["video_path"]) and not os.path.exists(data["image_path"])
 
     assert await hass.config_entries.async_unload(entry.entry_id)

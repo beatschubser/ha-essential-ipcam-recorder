@@ -14,7 +14,7 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import ServiceValidationError, Unauthorized
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
@@ -24,11 +24,13 @@ from .const import (
     CARD_URL_BASE,
     CONF_DAY_FOLDER_FORMAT,
     DOMAIN,
+    SERVICE_DELETE_EVENT,
     SERVICE_TOGGLE_FAVORITE,
     WS_CAMERAS,
 )
 from .helpers import (
     EVENT_FILE_RE,
+    delete_event_files,
     favorite_target,
     is_inside,
     media_id_to_path,
@@ -93,6 +95,46 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         DOMAIN,
         SERVICE_TOGGLE_FAVORITE,
         toggle_favorite,
+        schema=vol.Schema({vol.Required(ATTR_MEDIA_CONTENT_ID): cv.string}),
+    )
+
+    async def delete_event(call: ServiceCall) -> None:
+        # Only administrators (calls without a user, e.g. from automations, are allowed)
+        if call.context.user_id:
+            user = await hass.auth.async_get_user(call.context.user_id)
+            if user is None or not user.is_admin:
+                raise Unauthorized(context=call.context)
+        media_id: str = call.data[ATTR_MEDIA_CONTENT_ID]
+        path = media_id_to_path(media_id, hass.config.media_dirs)
+        recorder = next(
+            (r for r in _recorders(hass) if path and is_inside(path, r.folder)), None
+        )
+        if path is None or recorder is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="not_a_recording"
+            )
+        try:
+            deleted = await hass.async_add_executor_job(
+                delete_event_files,
+                path,
+                recorder.folder,
+                recorder.favorites_folder,
+                str(recorder.config[CONF_DAY_FOLDER_FORMAT]),
+            )
+        except PermissionError as err:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="not_deletable"
+            ) from err
+        if not deleted:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="not_a_recording"
+            )
+        _LOGGER.info("%s: deleted %s", recorder.name, deleted)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_DELETE_EVENT,
+        delete_event,
         schema=vol.Schema({vol.Required(ATTR_MEDIA_CONTENT_ID): cv.string}),
     )
     return True

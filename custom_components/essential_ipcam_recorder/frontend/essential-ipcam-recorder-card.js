@@ -26,6 +26,7 @@ const KEC_DEFAULTS = {
   default_type: "PERSON",
   default_camera: "",
   favorites_folder: "Protected",
+  show_delete: true,
   play_in_hero: "always", // "always", "wide" (cards from hero_min_width on, else overlay), "never"
   hero_min_width: 600,
   sources: [],
@@ -50,6 +51,7 @@ const KEC_TEXT = {
     f_favorites_folder: "Folder for protected events (custom sources only)", f_sources: "Custom sources (empty = recorder cameras)",
     f_types: "Event types (label: name, icon, color)",
     back_to_latest: "Back to latest",
+    del: "Delete", del_confirm: "Delete?", del_error: "Event could not be deleted", f_show_delete: "Show delete button (admins only)",
     f_play_in_hero: "Play list videos in the large player", f_hero_min_width: "Large player: minimum card width",
     hero_always: "Always", hero_wide: "On wide cards only", hero_never: "Never (overlay)",
   },
@@ -66,6 +68,7 @@ const KEC_TEXT = {
     f_favorites_folder: "Ordner für geschützte Events (nur bei eigenen Quellen)", f_sources: "Eigene Quellen (leer = Kameras der Integration)",
     f_types: "Eventtypen (Kennung: name, icon, color)",
     back_to_latest: "Zurück zum neuesten",
+    del: "Löschen", del_confirm: "Löschen?", del_error: "Event konnte nicht gelöscht werden", f_show_delete: "Löschen-Knopf anzeigen (nur Admins)",
     f_play_in_hero: "Videos der Liste im großen Player abspielen", f_hero_min_width: "Großer Player: Mindestbreite der Karte",
     hero_always: "Immer", hero_wide: "Nur auf breiten Karten", hero_never: "Nie (Overlay)",
   },
@@ -356,13 +359,14 @@ class KameraEventCard extends HTMLElement {
         border: 0; background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer;
       }
       .zeile:hover { background: color-mix(in srgb, var(--primary-text-color) 5%, transparent); }
+      .zeile-wrap { --kec-thumb-akt: clamp(var(--kec-thumb-w), 32cqw, var(--kec-thumb-max)); }
       .thumb {
-        position: relative; width: clamp(var(--kec-thumb-w), 32cqw, var(--kec-thumb-max)); aspect-ratio: 16 / 9; flex-shrink: 0; border-radius: 8px; overflow: hidden;
+        position: relative; width: var(--kec-thumb-akt); aspect-ratio: 16 / 9; flex-shrink: 0; border-radius: 8px; overflow: hidden;
         background: var(--secondary-background-color, #2b2f31);
       }
       .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
       @container (min-width: 500px) {
-        .thumb { width: clamp(var(--kec-thumb-w), 45cqw, var(--kec-thumb-max)); }
+        .zeile-wrap { --kec-thumb-akt: clamp(var(--kec-thumb-w), 45cqw, var(--kec-thumb-max)); }
       }
       .badge {
         position: absolute; right: 4px; bottom: 4px; display: inline-flex; align-items: center; gap: 2px;
@@ -390,6 +394,15 @@ class KameraEventCard extends HTMLElement {
       .stern[disabled] { opacity: 0.5; cursor: progress; }
       .hero-wrap .stern { left: 12px; top: 12px; width: 40px; height: 40px; --mdc-icon-size: 24px; }
       .zeile-wrap .stern { left: 20px; top: calc(var(--kec-abstand) / 2 + 4px); }
+      .loeschen {
+        position: absolute; z-index: 1; height: 32px; min-width: 32px; border-radius: 16px; padding: 0 6px;
+        border: 0; background: rgba(0, 0, 0, 0.55); color: #fff; cursor: pointer; font: inherit; font-size: 13px; font-weight: 500;
+        display: flex; align-items: center; justify-content: center; gap: 4px; --mdc-icon-size: 20px;
+      }
+      .loeschen.bestaetigen { background: var(--error-color, #db4437); padding: 0 10px 0 8px; }
+      .loeschen[disabled] { opacity: 0.5; cursor: progress; }
+      .hero-wrap .loeschen { right: 12px; top: 12px; height: 40px; min-width: 40px; border-radius: 20px; --mdc-icon-size: 24px; }
+      .zeile-wrap .loeschen { left: calc(12px + var(--kec-thumb-akt)); top: calc(var(--kec-abstand) / 2 + 4px); transform: translateX(-100%); }
     `;
     this._card = kecEl("ha-card");
     this._filterEl = kecEl("div", { class: "filter" });
@@ -623,6 +636,61 @@ class KameraEventCard extends HTMLElement {
     return btn;
   }
 
+  _kannLoeschen(e) {
+    return !!(
+      this._config.show_delete !== false && !e.fav && this._hass.user && this._hass.user.is_admin &&
+      this._hass.services && this._hass.services[KEC_DOMAIN] && this._hass.services[KEC_DOMAIN].delete_event
+    );
+  }
+
+  /* Two steps: the first tap asks ("Delete?"), a second tap within 4 s deletes. */
+  _loeschKnopf(e) {
+    if (!this._kannLoeschen(e)) return null;
+    const icon = kecEl("ha-icon", { icon: "mdi:trash-can-outline" });
+    const text = kecEl("span");
+    const btn = kecEl("button", { class: "loeschen", "aria-label": this._t("del"), title: this._t("del") }, [icon, text]);
+    let timer = null;
+    const zurueck = () => {
+      clearTimeout(timer);
+      btn.classList.remove("bestaetigen");
+      text.textContent = "";
+      btn.setAttribute("aria-label", this._t("del"));
+    };
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      if (!btn.classList.contains("bestaetigen")) {
+        btn.classList.add("bestaetigen");
+        text.textContent = this._t("del_confirm");
+        btn.setAttribute("aria-label", this._t("del_confirm"));
+        timer = setTimeout(zurueck, 4000);
+        return;
+      }
+      clearTimeout(timer);
+      this._loeschen(e, btn, zurueck);
+    });
+    return btn;
+  }
+
+  async _loeschen(e, btn, zurueck) {
+    btn.disabled = true;
+    try {
+      if (e.key === this._heroKey) this._heroStoppen();
+      await this._hass.callService(KEC_DOMAIN, "delete_event", { media_content_id: e.bild });
+      if (this._auswahl === e.key) this._auswahl = null;
+      this._signatur = null;
+      this._heroKey = null;
+      await this._aktualisieren(true, true);
+    } catch (err) {
+      btn.disabled = false;
+      zurueck();
+      this.dispatchEvent(new CustomEvent("hass-notification", {
+        detail: { message: `${this._t("del_error")}: ${err && err.message ? err.message : err}` },
+        bubbles: true,
+        composed: true,
+      }));
+    }
+  }
+
   async _favoritUmschalten(e, btn) {
     btn.disabled = true;
     try {
@@ -677,7 +745,7 @@ class KameraEventCard extends HTMLElement {
         this._typChip(typ),
       ]),
     ]);
-    const wrap = kecEl("div", { class: "hero-wrap" }, [medien, this._stern(e)]);
+    const wrap = kecEl("div", { class: "hero-wrap" }, [medien, this._stern(e), this._loeschKnopf(e)]);
     this._heroEl.replaceChildren(wrap, info, kecEl("div", { class: "trenner" }));
   }
 
@@ -688,6 +756,11 @@ class KameraEventCard extends HTMLElement {
     const alt = this._heroEl.querySelector(".hero-wrap > .stern");
     const neu = this._stern(e);
     if (alt && neu) alt.replaceWith(neu);
+    const wrap = this._heroEl.querySelector(".hero-wrap");
+    const altLoeschen = wrap && wrap.querySelector(":scope > .loeschen");
+    const neuLoeschen = this._loeschKnopf(e);
+    if (altLoeschen) altLoeschen.remove();
+    if (wrap && neuLoeschen) wrap.append(neuLoeschen);
   }
 
   _imHeroAbspielen() {
@@ -763,7 +836,7 @@ class KameraEventCard extends HTMLElement {
           kecEl("span", { class: "zeile-zeit", text: this._wann(e.ts) }),
         ]),
       ]);
-      teile.push(kecEl("div", { class: `zeile-wrap${e.key === heroKey ? " gewaehlt" : ""}` }, [zeile, this._stern(e)]));
+      teile.push(kecEl("div", { class: `zeile-wrap${e.key === heroKey ? " gewaehlt" : ""}` }, [zeile, this._stern(e), this._loeschKnopf(e)]));
     });
     this._listeEl.replaceChildren(...teile);
   }
@@ -827,6 +900,7 @@ const KEC_SCHEMA = [
   { name: "show_camera_filter", selector: { boolean: {} } },
   { name: "default_type", selector: { text: {} } },
   { name: "default_camera", selector: { text: {} } },
+  { name: "show_delete", selector: { boolean: {} } },
   { name: "play_in_hero", selector: { select: { mode: "dropdown", options: ["always", "wide", "never"] } } },
   { name: "hero_min_width", selector: { number: { min: 200, max: 2000, mode: "box", unit_of_measurement: "px" } } },
   { name: "favorites_folder", selector: { text: {} } },

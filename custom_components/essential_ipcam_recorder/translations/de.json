@@ -90,12 +90,25 @@
   "exceptions": {
     "not_a_recording": {
       "message": "Diese Datei ist keine Aufnahme einer eingerichteten Kamera."
+    },
+    "not_deletable": {
+      "message": "Nur Events in Tagesordnern können gelöscht werden. Geschützte Events zuerst freigeben."
     }
   },
   "services": {
     "toggle_favorite": {
       "name": "Schutz umschalten",
       "description": "Verschiebt eine Aufnahme in den Ordner für geschützte Events oder zurück in ihren Tagesordner.",
+      "fields": {
+        "media_content_id": {
+          "name": "Medien-ID",
+          "description": "Media-Source-ID des Bildes oder Videos."
+        }
+      }
+    },
+    "delete_event": {
+      "name": "Event löschen",
+      "description": "Löscht Bild und Video einer Aufnahme im Tagesordner. Geschützte Events werden nicht gelöscht. Nur für Administratoren.",
       "fields": {
         "media_content_id": {
           "name": "Medien-ID",

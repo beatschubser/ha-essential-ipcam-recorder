@@ -90,12 +90,25 @@
   "exceptions": {
     "not_a_recording": {
       "message": "This file is not a recording of a configured camera."
+    },
+    "not_deletable": {
+      "message": "Only events in day folders can be deleted. Protected events must be unprotected first."
     }
   },
   "services": {
     "toggle_favorite": {
       "name": "Toggle protection",
       "description": "Moves a recording into the folder for protected events, or back into its day folder.",
+      "fields": {
+        "media_content_id": {
+          "name": "Media ID",
+          "description": "Media source ID of the image or video."
+        }
+      }
+    },
+    "delete_event": {
+      "name": "Delete event",
+      "description": "Deletes image and video of a recording in a day folder. Protected events are not deleted. Administrators only.",
       "fields": {
         "media_content_id": {
           "name": "Media ID",

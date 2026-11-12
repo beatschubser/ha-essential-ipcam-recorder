@@ -56,6 +56,7 @@ EVENT_SAVED = f"{DOMAIN}_event_saved"
 SIGNAL_UPDATE = f"{DOMAIN}_update_{{}}"
 
 SERVICE_TOGGLE_FAVORITE = "toggle_favorite"
+SERVICE_DELETE_EVENT = "delete_event"
 ATTR_MEDIA_CONTENT_ID = "media_content_id"
 
 WS_CAMERAS = f"{DOMAIN}/cameras"

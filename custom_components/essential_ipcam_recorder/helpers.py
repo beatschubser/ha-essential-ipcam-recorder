@@ -120,6 +120,42 @@ def favorite_target(
     return favorites, True
 
 
+def delete_event_files(
+    file_path: str, folder: str, favorites_folder: str, day_folder_format: str
+) -> list[str]:
+    """Delete image and video of one event. Blocking.
+
+    Same strict rules as the cleanup: the file must be named like an event and lie
+    directly in a date-named day folder of the camera folder (protected events and
+    any other place are refused), no symlinks. Raises PermissionError when refused.
+    """
+    path = os.path.normpath(file_path)
+    day = os.path.dirname(path)
+    folder = os.path.normpath(folder)
+    day_name = os.path.basename(day)
+    if (
+        not EVENT_FILE_RE.match(os.path.basename(path))
+        or os.path.dirname(day) != folder
+        or day_name == favorites_folder
+        or not _is_day_folder(day_name, day_folder_format)
+        or os.path.islink(day)
+        or not _real_inside(day, folder)
+    ):
+        raise PermissionError(path)
+    stem = os.path.splitext(path)[0]
+    deleted = []
+    for suffix in MEDIA_SUFFIXES:
+        target = stem + suffix
+        if (
+            EVENT_FILE_RE.match(os.path.basename(target))
+            and os.path.isfile(target)
+            and not os.path.islink(target)
+        ):
+            os.remove(target)
+            deleted.append(target)
+    return deleted
+
+
 def move_event_files(stem: str, target: str) -> list[str]:
     """Move <stem>.jpg and <stem>.mp4 into target. Blocking.
 

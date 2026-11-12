@@ -3,10 +3,13 @@
 import os
 import time
 
+import pytest
+
 from custom_components.essential_ipcam_recorder.helpers import (
     SensorState,
     cleanup_folder,
     cleanup_temp,
+    delete_event_files,
     favorite_target,
     folder_to_media_id,
     is_inside,
@@ -149,3 +152,20 @@ def test_move_never_overwrites(tmp_path):
     dst.write_bytes(b"keep")
     assert move_event_files(str(src)[:-4], str(dst.parent)) == []
     assert dst.read_bytes() == b"keep" and src.exists()
+
+
+def test_delete_event_files(tmp_path):
+    folder = tmp_path / "Garden Cam"
+    img = _old(folder / "2026_01_01" / "2026-01-01_10-00-00_[PERSON].jpg", days=0)
+    vid = _old(folder / "2026_01_01" / "2026-01-01_10-00-00_[PERSON].mp4", days=0)
+    other = _old(folder / "2026_01_01" / "2026-01-01_11-00-00_[PERSON].mp4", days=0)
+    fav = _old(folder / "Protected" / "2026-01-02_10-00-00_[PET].jpg", days=0)
+    foreign = _old(folder / "2026_01_01" / "holiday.jpg", days=0)
+    nested = _old(folder / "x" / "2026_01_01" / "2026-01-01_10-00-00_[PET].jpg", days=0)
+    args = (str(folder), "Protected", "%Y_%m_%d")
+    assert len(delete_event_files(str(img), *args)) == 2
+    assert not img.exists() and not vid.exists() and other.exists()
+    for refused in (fav, foreign, nested, tmp_path / "elsewhere" / "2026-01-01_10-00-00_[PET].jpg"):
+        with pytest.raises(PermissionError):
+            delete_event_files(str(refused), *args)
+    assert fav.exists() and foreign.exists() and nested.exists()
