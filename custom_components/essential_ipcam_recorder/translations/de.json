@@ -14,7 +14,7 @@
         },
         "data_description": {
           "camera_entity": "Kamera-Entität für die Aufnahme. Ihre Stream-Quelle wird genutzt, außer in den Optionen ist eine Stream-URL gesetzt.",
-          "folder": "Ordner innerhalb eines Home-Assistant-Medienordners. Darin entstehen Tagesordner und Favoriten.",
+          "folder": "Ordner innerhalb eines Home-Assistant-Medienordners. Darin entstehen Tagesordner und der Ordner für geschützte Events.",
           "person_sensors": "Höchste Priorität für die Bezeichnung.",
           "pet_sensors": "Zweite Priorität für die Bezeichnung.",
           "motion_sensors": "Allgemeine Bewegung, niedrigste Priorität."
@@ -47,7 +47,7 @@
           "rtsp_transport": "RTSP-Transport",
           "use_wallclock_as_timestamps": "Systemzeit als Zeitstempel",
           "stream_url": "Stream-URL (optional)",
-          "favorites_folder": "Name Favoritenordner",
+          "favorites_folder": "Ordner für geschützte Events",
           "day_folder_format": "Format Tagesordner"
         },
         "data_description": {
@@ -60,11 +60,11 @@
           "lookback": "Sekunden vor dem Event. Hält dauerhaft einen Stream offen. Beginnt am vorherigen Keyframe. 0 = aus.",
           "post_motion": "Video endet so lange nach dem Ausschalten des letzten Sensors. 0 = nie kürzen.",
           "snapshot_offset": "Sekunden nach dem Event für das Vorschaubild.",
-          "retention_days": "Ältere Aufnahmen werden täglich um 03:30 gelöscht. Favoriten bleiben. 0 = nie löschen.",
+          "retention_days": "Ältere Aufnahmen werden täglich um 03:30 gelöscht. Geschützte Events bleiben. 0 = nie löschen.",
           "rtsp_transport": "Bei go2rtc als Quelle tcp verwenden.",
           "use_wallclock_as_timestamps": "Behebt kaputte Aufnahmen bei Kameras mit fehlerhaften Zeitstempeln.",
           "stream_url": "Ersetzt die Stream-Quelle der Kamera, z. B. rtsp://127.0.0.1:8554/garten_hd?video=all&audio=aac",
-          "favorites_folder": "Unterordner für Favoriten, vom Aufräumen ausgenommen.",
+          "favorites_folder": "Unterordner für geschützte Events, wird nie automatisch gelöscht.",
           "day_folder_format": "strftime-Format, z. B. %Y_%m_%d"
         }
       }
@@ -94,8 +94,8 @@
   },
   "services": {
     "toggle_favorite": {
-      "name": "Favorit umschalten",
-      "description": "Verschiebt eine Aufnahme in den Favoritenordner oder zurück in ihren Tagesordner.",
+      "name": "Schutz umschalten",
+      "description": "Verschiebt eine Aufnahme in den Ordner für geschützte Events oder zurück in ihren Tagesordner.",
       "fields": {
         "media_content_id": {
           "name": "Medien-ID",

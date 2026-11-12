@@ -91,9 +91,9 @@ async def test_record_label_and_favorite(hass: HomeAssistant, tmp_path, hass_ws_
         DOMAIN, "toggle_favorite", {"media_content_id": data["image"]}, blocking=True
     )
     name = os.path.basename(data["video_path"])
-    assert (folder / "Favorites" / name).exists()
+    assert (folder / "Protected" / name).exists()
 
-    fav_id = data["image"].rsplit("/", 2)[0] + "/Favorites/" + os.path.basename(data["image_path"])
+    fav_id = data["image"].rsplit("/", 2)[0] + "/Protected/" + os.path.basename(data["image_path"])
     await hass.services.async_call(
         DOMAIN, "toggle_favorite", {"media_content_id": fav_id}, blocking=True
     )

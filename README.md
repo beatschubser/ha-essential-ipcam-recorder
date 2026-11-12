@@ -14,8 +14,8 @@ Event recordings for Home Assistant cameras: when a motion, person or pet sensor
 - Labels by priority: person > pet > motion, from all sensors active during the recording
 - Trims the video to the last motion plus a configurable tail
 - Preview image extracted from the video
-- Day folders, favorites folder (kept forever), daily cleanup
-- Timeline card with a large player for all events, filters by camera and type, favorites lock
+- Day folders, protected events (never deleted by the cleanup), daily cleanup
+- Timeline card with a large player for all events, filters by camera and type, lock to protect events
 - Entities per camera: `Recording` and `Last event`, plus the event `essential_ipcam_recorder_event_saved` for your own automations
 
 ## Requirements
@@ -53,11 +53,11 @@ Stream URL: `rtsp://127.0.0.1:8554/garden_hd?video=all&audio=aac` with RTSP tran
 | Lookback | 3 s | Keeps a stream running; starts at the previous keyframe; 0 = off |
 | Keep after last motion | 5 s | 0 = never trim |
 | Still image after event | 1 s | |
-| Keep recordings | 7 days | Daily at 03:30, favorites are kept; 0 = forever |
+| Keep recordings | 7 days | Daily at 03:30, protected events are kept; 0 = forever |
 | RTSP transport | tcp | |
 | Use wallclock as timestamps | on | Fixes corrupted videos from cameras with broken timestamps |
 | Stream URL | | Overrides the camera's stream source |
-| Favorites folder | `Favorites` | |
+| Folder for protected events | `Protected` | |
 | Day folder format | `%Y_%m_%d` | |
 
 ## Card
@@ -77,7 +77,7 @@ default_type: PERSON
 ```
 <folder>/2026_11_10/2026-11-10_20-15-00_[PERSON].mp4
 <folder>/2026_11_10/2026-11-10_20-15-00_[PERSON].jpg
-<folder>/Favorites/...
+<folder>/Protected/...
 <folder>/~2026-11-10_20-15-00_camera_garden.mp4   running recording (temporary)
 ```
 
@@ -86,7 +86,7 @@ default_type: PERSON
 - Audio is only recorded if the stream delivers AAC. Other formats are dropped by Home Assistant without a log entry.
 - H.265 streams record fine, but not every browser plays them.
 - While recording, files start with `~` and stay in the camera folder. When done they are renamed into the day folder. Leftovers (e.g. after a restart) are removed after 15 minutes.
-- The cleanup only deletes files named like events inside date-named day folders. Favorites and any other files or folders are never touched.
+- The cleanup only deletes files named like events inside date-named day folders. Protected events and any other files or folders are never touched.
 - Lookback keeps a stream open permanently, which adds network load to the camera.
 
 ## License

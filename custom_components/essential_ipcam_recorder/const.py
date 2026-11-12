@@ -34,7 +34,7 @@ DEFAULT_OPTIONS: dict[str, object] = {
     CONF_WALLCLOCK: True,
     CONF_STREAM_URL: "",
     CONF_DAY_FOLDER_FORMAT: "%Y_%m_%d",
-    CONF_FAVORITES_FOLDER: "Favorites",
+    CONF_FAVORITES_FOLDER: "Protected",
 }
 
 RTSP_TRANSPORT_OPTIONS = ["tcp", "udp", "udp_multicast", "http"]

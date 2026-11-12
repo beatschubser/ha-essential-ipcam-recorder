@@ -14,7 +14,7 @@
         },
         "data_description": {
           "camera_entity": "Camera entity to record. Its stream source is used unless a stream URL is set in the options.",
-          "folder": "Folder inside a Home Assistant media folder. Day folders and favorites are created inside.",
+          "folder": "Folder inside a Home Assistant media folder. Day folders and the folder for protected events are created inside.",
           "person_sensors": "Highest priority for the file label.",
           "pet_sensors": "Second priority for the file label.",
           "motion_sensors": "Generic motion, lowest priority."
@@ -47,7 +47,7 @@
           "rtsp_transport": "RTSP transport",
           "use_wallclock_as_timestamps": "Use wallclock as timestamps",
           "stream_url": "Stream URL (optional)",
-          "favorites_folder": "Favorites folder name",
+          "favorites_folder": "Folder for protected events",
           "day_folder_format": "Day folder format"
         },
         "data_description": {
@@ -60,11 +60,11 @@
           "lookback": "Seconds before the event. Keeps a stream running permanently. Starts at the previous keyframe. 0 = off.",
           "post_motion": "Video ends this long after the last sensor switched off. 0 = never trim.",
           "snapshot_offset": "Seconds after the event for the preview image.",
-          "retention_days": "Older recordings are deleted daily at 03:30. Favorites are kept. 0 = keep forever.",
+          "retention_days": "Older recordings are deleted daily at 03:30. Protected events are kept. 0 = keep forever.",
           "rtsp_transport": "Use tcp when the source is go2rtc.",
           "use_wallclock_as_timestamps": "Fixes corrupted recordings from cameras with broken timestamps.",
           "stream_url": "Overrides the camera's stream source, e.g. rtsp://127.0.0.1:8554/garden_hd?video=all&audio=aac",
-          "favorites_folder": "Sub folder for favorites, excluded from cleanup.",
+          "favorites_folder": "Sub folder for protected events, never deleted by the cleanup.",
           "day_folder_format": "strftime format, e.g. %Y_%m_%d"
         }
       }
@@ -94,8 +94,8 @@
   },
   "services": {
     "toggle_favorite": {
-      "name": "Toggle favorite",
-      "description": "Moves a recording into the favorites folder, or back into its day folder.",
+      "name": "Toggle protection",
+      "description": "Moves a recording into the folder for protected events, or back into its day folder.",
       "fields": {
         "media_content_id": {
           "name": "Media ID",
