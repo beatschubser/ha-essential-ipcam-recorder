@@ -15,7 +15,7 @@ Event recordings for Home Assistant cameras: when a motion, person or pet sensor
 - Trims the video to the last motion plus a configurable tail
 - Preview image extracted from the video
 - Day folders, favorites folder (kept forever), daily cleanup
-- Timeline card with inline player, filters by camera and type, favorites star
+- Timeline card with inline player, filters by camera and type, favorites lock
 - Entities per camera: `Recording` and `Last event`, plus the event `essential_ipcam_recorder_event_saved` for your own automations
 
 ## Requirements

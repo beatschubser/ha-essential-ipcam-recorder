@@ -588,7 +588,7 @@ class KameraEventCard extends HTMLElement {
       "aria-pressed": String(!!e.fav),
       "aria-label": this._t(e.fav ? "fav_remove" : "fav_add"),
       title: this._t(e.fav ? "fav_remove" : "fav_add"),
-    }, [kecEl("ha-icon", { icon: e.fav ? "mdi:star" : "mdi:star-outline" })]);
+    }, [kecEl("ha-icon", { icon: e.fav ? "mdi:lock" : "mdi:lock-open-variant-outline" })]);
     btn.addEventListener("click", (ev) => {
       ev.stopPropagation();
       this._favoritUmschalten(e, btn);
