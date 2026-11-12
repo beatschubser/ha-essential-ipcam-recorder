@@ -26,7 +26,7 @@ const KEC_DEFAULTS = {
   default_type: "PERSON",
   default_camera: "",
   favorites_folder: "Favorites",
-  play_in_hero: "wide", // "always", "wide" (cards from hero_min_width on, else overlay), "never"
+  play_in_hero: "always", // "always", "wide" (cards from hero_min_width on, else overlay), "never"
   hero_min_width: 600,
   sources: [],
   types: {
@@ -691,7 +691,7 @@ class KameraEventCard extends HTMLElement {
   }
 
   _imHeroAbspielen() {
-    const modus = String(this._config.play_in_hero || "wide");
+    const modus = String(this._config.play_in_hero || "always");
     if (modus === "always") return true;
     if (modus === "never") return false;
     return this.getBoundingClientRect().width >= (Number(this._config.hero_min_width) || 600);
