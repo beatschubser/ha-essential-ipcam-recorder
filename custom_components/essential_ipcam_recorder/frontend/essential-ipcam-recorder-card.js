@@ -394,6 +394,16 @@ class KameraEventCard extends HTMLElement {
         display: flex; align-items: center; justify-content: center; --mdc-icon-size: 20px;
       }
       .stern.aktiv { color: #f5c542; }
+      /* Hover/focus: the icon takes the color of its action (only on devices with a mouse) */
+      .stern, .loeschen, .download { transition: color 0.15s, background-color 0.15s; }
+      .stern:focus-visible { color: #f5c542; background: rgba(0, 0, 0, 0.8); }
+      .download:focus-visible { color: var(--primary-color); background: rgba(0, 0, 0, 0.8); }
+      .loeschen:not(.bestaetigen):focus-visible { color: var(--error-color, #db4437); background: rgba(0, 0, 0, 0.8); }
+      @media (hover: hover) {
+        .stern:not([disabled]):hover { color: #f5c542; background: rgba(0, 0, 0, 0.8); }
+        .download:not([disabled]):hover { color: var(--primary-color); background: rgba(0, 0, 0, 0.8); }
+        .loeschen:not([disabled]):not(.bestaetigen):hover { color: var(--error-color, #db4437); background: rgba(0, 0, 0, 0.8); }
+      }
       .stern[disabled] { opacity: 0.5; cursor: progress; }
       .hero-wrap .stern { left: 12px; top: 12px; width: 40px; height: 40px; --mdc-icon-size: 24px; }
       .zeile-wrap .stern { left: 20px; top: calc(var(--kec-abstand) / 2 + 4px); }
