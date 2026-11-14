@@ -69,10 +69,14 @@ jobs:
             previous=$(git describe --tags --abbrev=0 --match 'v*' --exclude 'v*-*' HEAD 2>/dev/null || true)
           fi
           range=${previous:+$previous..}HEAD
+          changes=$(python3 scripts/release_notes.py "$range")
           {
-            echo "## Changes"
-            echo
-            python3 scripts/release_notes.py "$range"
+            # a release without listed changes (only the version commit) gets no heading
+            if [ -n "$changes" ]; then
+              echo "## Changes"
+              echo
+              echo "$changes"
+            fi
             if [ -n "$previous" ]; then
               echo
               echo "**Full changelog:** https://github.com/${GITHUB_REPOSITORY}/compare/${previous}...v${{ steps.version.outputs.version }}"

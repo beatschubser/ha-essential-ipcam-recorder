@@ -10,7 +10,7 @@
  * Favoriten:  <Quelle>/<Favoritenordner>/<Datei>, verschoben über essential_ipcam_recorder.toggle_favorite
  */
 
-const VERSION = "1.4.2";
+const VERSION = "1.4.3";
 const KEC_DOMAIN = "essential_ipcam_recorder";
 const KEC_TAG = "essential-ipcam-recorder-card";
 
@@ -395,7 +395,6 @@ class KameraEventCard extends HTMLElement {
       }
       .stern.aktiv { color: #f5c542; }
       /* Hover/focus: the icon takes the color of its action (only on devices with a mouse) */
-      .stern, .loeschen, .download, .hero-play { transition: color 0.15s, background-color 0.15s; }
       .hero-play:focus-visible { color: var(--primary-color); background: rgba(0, 0, 0, 0.8); }
       .stern:focus-visible { color: #f5c542; background: rgba(0, 0, 0, 0.8); }
       .download:focus-visible { color: var(--primary-color); background: rgba(0, 0, 0, 0.8); }
