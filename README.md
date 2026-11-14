@@ -87,6 +87,7 @@ default_type: PERSON
 - Audio is only recorded if the stream delivers AAC. Other formats are dropped by Home Assistant without a log entry.
 - H.265 streams record fine, but not every browser plays them.
 - While recording, files start with `~` and stay in the camera folder. When done they are renamed into the day folder. Leftovers (e.g. after a restart) are removed after 15 minutes.
+- If a sensor is still on when the maximum length is reached, or an event comes in while the clip is processed, the next recording starts right away. A stuck sensor therefore records continuously in clips of the maximum length.
 - The cleanup only deletes files named like events inside date-named day folders. Protected events and any other files or folders are never touched.
 - Lookback keeps a stream open permanently, which adds network load to the camera.
 

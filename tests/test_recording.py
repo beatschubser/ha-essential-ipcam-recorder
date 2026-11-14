@@ -37,6 +37,7 @@ async def test_record_label_and_favorite(
         os.utime(path, (old, old))
         await entry.runtime_data._async_cleanup_temp()
         assert os.path.exists(path)
+        hass.states.async_set("binary_sensor.motion", "off")  # quiet at the end
 
     stream.async_record = AsyncMock(side_effect=fake_record)
     stream.start = AsyncMock()
@@ -214,4 +215,61 @@ async def test_stop_when_quiet(hass: HomeAssistant, tmp_path) -> None:
         await hass.async_block_till_done(wait_background_tasks=True)
         assert entry.runtime_data.recording is False
         assert entry.runtime_data.last_event["label"] == "PET"
+        assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_follow_up_when_activity_continues(hass: HomeAssistant, tmp_path) -> None:
+    """A sensor still on at the maximum length starts the next recording at once."""
+    hass.config.media_dirs = {"local": str(tmp_path)}
+    hass.config.allowlist_external_dirs = {str(tmp_path)}
+    folder = tmp_path / "Garden"
+    calls = []
+    stream = MagicMock()
+    stream.start = AsyncMock()
+    stream.stop = AsyncMock()
+
+    async def fake_record(path, duration, lookback):
+        calls.append(path)
+        with open(path, "wb") as f:
+            f.write(b"video")
+        if len(calls) == 2:  # the person leaves during the second recording
+            hass.states.async_set("binary_sensor.person", "off")
+
+    stream.async_record = AsyncMock(side_effect=fake_record)
+
+    async def fake_ffmpeg(self, args, output):
+        with open(output, "wb") as f:
+            f.write(b"jpg")
+        return True
+
+    hass.states.async_set("binary_sensor.person", "off")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Garden",
+        data={"camera_entity": "camera.garden", "folder": str(folder)},
+        options={"person_sensors": ["binary_sensor.person"], "lookback": 0, "post_motion": 0},
+    )
+    entry.add_to_hass(hass)
+    events = []
+    hass.bus.async_listen(EVENT_SAVED, lambda e: events.append(e))
+    base = "custom_components.essential_ipcam_recorder"
+    with (
+        patch(f"{base}.recorder.create_stream", return_value=stream),
+        patch(f"{base}.recorder.async_get_stream_source", AsyncMock(return_value="rtsp://x")),
+        patch(f"{base}.recorder.IpCamRecorder._async_ffmpeg", fake_ffmpeg),
+        patch(f"{base}.add_extra_js_url"),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        hass.states.async_set("binary_sensor.person", "on")  # stays on
+        for _ in range(200):
+            await hass.async_block_till_done(wait_background_tasks=True)
+            # follow-ups wait a few seconds after very short recordings
+            async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=6))
+            if len(events) >= 2 and not entry.runtime_data.recording:
+                break
+            await asyncio.sleep(0.01)
+        assert len(calls) == 2
+        assert [e.data["label"] for e in events] == ["PERSON", "PERSON"]
+        assert len({e.data["video_path"] for e in events}) == 2  # no clip overwritten
         assert await hass.config_entries.async_unload(entry.entry_id)

@@ -95,6 +95,33 @@ def _video_duration(path: str) -> float | None:
     return None
 
 
+_PRIORITY = {"person": 3, "pet": 2, "motion": 1}
+FOLLOW_UP_MIN_SECONDS = 5
+
+
+def _higher(first: str | None, second: str | None) -> str | None:
+    """The more specific of two trigger kinds (person > pet > motion)."""
+    if first is None:
+        return second
+    if second is None:
+        return first
+    return first if _PRIORITY[first] >= _PRIORITY[second] else second
+
+
+def _free_base(day_folder: str, when: Any, label: str) -> str:
+    """File name base for an event that never overwrites an existing recording.
+
+    Two clips can start within the same second (follow-up after a very short
+    recording); the later one then gets the next free second.
+    """
+    for offset in range(60):
+        stamp = (when + timedelta(seconds=offset)).strftime(FILE_TIME_FORMAT)
+        base = os.path.join(day_folder, f"{stamp}_[{label}]")
+        if not os.path.lexists(base + ".mp4") and not os.path.lexists(base + ".jpg"):
+            return base
+    raise HomeAssistantError(f"No free file name in {day_folder}")
+
+
 def _non_empty(path: str) -> bool:
     return os.path.isfile(path) and os.path.getsize(path) > 0
 
@@ -116,6 +143,12 @@ class IpCamRecorder:
         self._stream: Stream | None = None
         self._unsubs: list[Callable[[], None]] = []
         self._current_temp: str | None = None
+        # set while the finished clip is processed: events then start a follow-up
+        self._finishing = False
+        self._pending: str | None = None
+        self._stopped = False
+        self._last_start = 0.0
+        self._follow_timer: Callable[[], None] | None = None
 
     # ---- configuration -------------------------------------------------
 
@@ -200,6 +233,10 @@ class IpCamRecorder:
 
     async def async_stop(self) -> None:
         """Stop listening and release the stream."""
+        self._stopped = True
+        if self._follow_timer:
+            self._follow_timer()
+            self._follow_timer = None
         while self._unsubs:
             self._unsubs.pop()()
         if self._stream is not None:
@@ -255,20 +292,63 @@ class IpCamRecorder:
         new = event.data["new_state"]
         if old is None or new is None or old.state != "off" or new.state != "on":
             return
+        kind = self._kind(event.data["entity_id"])
         if self.recording:
+            # Events during the recording are part of the clip. Events while the
+            # finished clip is processed must not get lost: they start the next one.
+            if self._finishing:
+                self._pending = _higher(self._pending, kind)
             return
-        entity_id = event.data["entity_id"]
+        self._start(kind)
+
+    def _kind(self, entity_id: str) -> str:
         if entity_id in self._sensors(CONF_PERSON_SENSORS):
-            kind = "person"
-        elif entity_id in self._sensors(CONF_PET_SENSORS):
-            kind = "pet"
-        else:
-            kind = "motion"
+            return "person"
+        if entity_id in self._sensors(CONF_PET_SENSORS):
+            return "pet"
+        return "motion"
+
+    @callback
+    def _start(self, kind: str) -> None:
         self.recording = True
         self._notify()
         self.entry.async_create_background_task(
             self.hass, self._async_record(kind), f"{DOMAIN} recording {self.name}"
         )
+
+    @callback
+    def _follow_up(self, wait_allowed: bool = True) -> None:
+        """Start the next recording right away if the scene is not quiet.
+
+        Covers a sensor that is still on when the maximum length is reached (no new
+        off -> on change would ever come) and events during the processing of the
+        finished clip. Nothing may get lost: this is a security recording.
+        """
+        kind = self._pending
+        self._pending = None
+        for entity_id in self.all_sensors:
+            state = self.hass.states.get(entity_id)
+            if state is not None and state.state == "on":
+                kind = _higher(kind, self._kind(entity_id))
+        if not kind or self._stopped:
+            return
+        # A recording that failed right away (camera offline) must not end in a
+        # tight loop: wait a moment. This also keeps file names (seconds) unique.
+        wait = FOLLOW_UP_MIN_SECONDS - (time.time() - self._last_start)
+        if wait > 0 and wait_allowed:
+            self._pending = kind
+            self.recording = True  # keep events from starting a second recording
+
+            @callback
+            def _later(_now: Any) -> None:
+                self._follow_timer = None
+                self.recording = False
+                self._follow_up(wait_allowed=False)
+
+            self._follow_timer = async_call_later(self.hass, wait, _later)
+            return
+        _LOGGER.debug("%s: activity continues, next recording (%s)", self.name, kind)
+        self._start(kind)
 
     @callback
     def _notify(self) -> None:
@@ -279,6 +359,7 @@ class IpCamRecorder:
     async def _async_record(self, kind: str) -> None:
         config = self.config
         start = time.time()
+        self._last_start = start
         now = dt_util.now()
         stamp = now.strftime(FILE_TIME_FORMAT)
         duration = int(config[CONF_VIDEO_DURATION])
@@ -299,6 +380,7 @@ class IpCamRecorder:
                     )
                 finally:
                     stop_watch()
+                    self._finishing = True
             except HomeAssistantError as err:
                 _LOGGER.error("%s: recording failed: %s", self.name, err)
             # real length: the recording may have been stopped early
@@ -316,7 +398,9 @@ class IpCamRecorder:
             await self.hass.async_add_executor_job(
                 lambda: os.makedirs(day_folder, exist_ok=True)
             )
-            base = os.path.join(day_folder, f"{stamp}_[{label}]")
+            base = await self.hass.async_add_executor_job(
+                _free_base, day_folder, now, label
+            )
             video, image = base + ".mp4", base + ".jpg"
 
             has_video = await self.hass.async_add_executor_job(_non_empty, temp)
@@ -373,8 +457,10 @@ class IpCamRecorder:
             _LOGGER.exception("%s: unexpected error while recording", self.name)
         finally:
             self._current_temp = None
+            self._finishing = False
             self.recording = False
             self._notify()
+            self._follow_up()
 
     def _watch_quiet(self, stream: Stream, start: float) -> Callable[[], None]:
         """Stop the recording `post_motion` seconds after the last sensor went off.
