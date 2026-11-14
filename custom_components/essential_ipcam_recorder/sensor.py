@@ -32,13 +32,16 @@ class LastEventSensor(IpCamEntity, SensorEntity, RestoreEntity):
     async def async_added_to_hass(self) -> None:
         """Restore the last event after a restart."""
         await super().async_added_to_hass()
-        if self.recorder.last_event is None and (state := await self.async_get_last_state()):
-            if (time := dt_util.parse_datetime(state.state)) is not None:
-                keys = ("label", "trigger", "video", "image", "video_path", "image_path")
-                self.recorder.last_event = {
-                    "time": time,
-                    **{k: state.attributes.get(k) for k in keys},
-                }
+        if (
+            self.recorder.last_event is None
+            and (state := await self.async_get_last_state())
+            and (time := dt_util.parse_datetime(state.state)) is not None
+        ):
+            keys = ("label", "trigger", "video", "image", "video_path", "image_path")
+            self.recorder.last_event = {
+                "time": time,
+                **{k: state.attributes.get(k) for k in keys},
+            }
 
     @property
     def native_value(self) -> datetime | None:

@@ -61,7 +61,6 @@ from .const import (
     CONF_RETENTION_DAYS,
     CONF_RTSP_TRANSPORT,
     CONF_SNAPSHOT_OFFSET,
-    CONF_STOP_WHEN_QUIET,
     CONF_STREAM_URL,
     CONF_VIDEO_DURATION,
     CONF_WALLCLOCK,
@@ -79,20 +78,9 @@ from .helpers import (
     cleanup_temp,
     folder_to_media_id,
     pick_label,
-    seconds_to_cut,
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-
-def _video_duration(path: str) -> float | None:
-    """Return the duration of a video file in seconds (blocking)."""
-    import av  # provided by the stream integration
-
-    with av.open(path) as container:
-        if container.duration:
-            return container.duration / 1_000_000
-    return None
 
 
 _PRIORITY = {"person": 3, "pet": 2, "motion": 1}
@@ -414,14 +402,6 @@ class IpCamRecorder:
                 )
                 if has_image:
                     await self.hass.async_add_executor_job(shutil.move, temp_image, image)
-                cut = seconds_to_cut(
-                    self._states(self.all_sensors),
-                    start,
-                    recorded,
-                    float(config[CONF_POST_MOTION]),
-                )
-                if cut > 1:
-                    await self._async_trim(temp, cut)
                 await self.hass.async_add_executor_job(shutil.move, temp, video)
             if not has_image:
                 try:
@@ -470,8 +450,6 @@ class IpCamRecorder:
         the watch.
         """
         post = float(self.config[CONF_POST_MOTION])
-        if not self.config.get(CONF_STOP_WHEN_QUIET) or post <= 0:
-            return lambda: None
         timer: Callable[[], None] | None = None
         done = False
 
@@ -533,22 +511,6 @@ class IpCamRecorder:
             )
             return False
         return await self.hass.async_add_executor_job(_non_empty, output)
-
-    async def _async_trim(self, path: str, cut: float) -> None:
-        try:
-            length = await self.hass.async_add_executor_job(_video_duration, path)
-        except Exception as err:  # noqa: BLE001  # any decoder error: keep the file
-            _LOGGER.warning("%s: could not read video length: %s", self.name, err)
-            return
-        if not length or length - cut <= 1:
-            return
-        trimmed = path + ".cut.mp4"
-        ok = await self._async_ffmpeg(
-            ["-i", path, "-t", f"{length - cut:.1f}", "-c", "copy", "-movflags", "+faststart", trimmed],
-            trimmed,
-        )
-        if ok:
-            await self.hass.async_add_executor_job(os.replace, trimmed, path)
 
     # ---- cleanup -------------------------------------------------------
 

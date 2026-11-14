@@ -16,7 +16,6 @@ from custom_components.essential_ipcam_recorder.helpers import (
     media_id_to_path,
     move_event_files,
     pick_label,
-    seconds_to_cut,
 )
 
 DIRS = {"local": "/media"}
@@ -30,14 +29,6 @@ def test_label_priority_and_stuck_sensor():
     assert pick_label("motion", [fresh], [], start) == "PERSON"
     assert pick_label("motion", [], [SensorState(True, 1001)], start) == "PET"
     assert pick_label("person", [], [], start) == "PERSON"
-
-
-def test_seconds_to_cut():
-    start = 1000.0
-    assert seconds_to_cut([SensorState(False, 1010)], start, 60, 5) == 45
-    assert seconds_to_cut([SensorState(True, 1010)], start, 60, 5) == 0
-    assert seconds_to_cut([SensorState(False, 1058)], start, 60, 5) == 0
-    assert seconds_to_cut([SensorState(False, 1010)], start, 60, 0) == 0
 
 
 def test_media_paths():

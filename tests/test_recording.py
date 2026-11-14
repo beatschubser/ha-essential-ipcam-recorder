@@ -26,6 +26,7 @@ async def test_record_label_and_favorite(
     folder = tmp_path / "Garden"
 
     stream = MagicMock()
+    stream.remove_provider = AsyncMock()
 
     async def fake_record(path, duration, lookback):
         assert os.path.basename(path).startswith("~")
@@ -58,7 +59,7 @@ async def test_record_label_and_favorite(
             "motion_sensors": ["binary_sensor.motion"],
             "person_sensors": ["binary_sensor.person"],
             "lookback": 0,
-            "post_motion": 0,
+            "post_motion": 5,
         },
     )
     entry.add_to_hass(hass)
@@ -227,6 +228,7 @@ async def test_follow_up_when_activity_continues(hass: HomeAssistant, tmp_path) 
     stream = MagicMock()
     stream.start = AsyncMock()
     stream.stop = AsyncMock()
+    stream.remove_provider = AsyncMock()
 
     async def fake_record(path, duration, lookback):
         calls.append(path)

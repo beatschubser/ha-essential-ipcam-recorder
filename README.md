@@ -6,13 +6,13 @@
 
 > Tested in daily use with Tapo cameras. Feedback on other cameras is welcome.
 
-Event recordings for Home Assistant cameras: when a motion, person or pet sensor fires, the recorder saves a video with lookback, picks the most specific label, trims the video to the end of the motion, extracts a preview image and shows everything in a bundled timeline card.
+Event recordings for Home Assistant cameras: when a motion, person or pet sensor fires, the recorder saves a video with lookback, picks the most specific label, ends the video shortly after the motion, extracts a preview image and shows everything in a bundled timeline card.
 
 ## Features
 
 - Video with lookback (seconds before the event) and audio (AAC)
 - Labels by priority: person > pet > motion, from all sensors active during the recording
-- Trims the video to the last motion plus a configurable tail
+- Ends the recording a configurable time after the last sensor switched off
 - Preview image extracted from the video
 - Day folders, protected events (never deleted by the cleanup), daily cleanup
 - Timeline card with a large player for all events, filters by camera and type, lock to protect events, two-step delete (admins only, protected events cannot be deleted), download button in the large player
@@ -51,8 +51,7 @@ Stream URL: `rtsp://127.0.0.1:8554/garden_hd?video=all&audio=aac` with RTSP tran
 |---|---|---|
 | Maximum video length | 60 s | Upper limit; events during a recording go into the same clip |
 | Lookback | 3 s | Keeps a stream running; starts at the previous keyframe; 0 = off |
-| Keep after last motion | 5 s | 0 = full length, never trimmed |
-| Stop when quiet | on | Recording ends once no sensor was on for "keep after last motion" |
+| Keep after last motion | 5 s | 0 = stop right away |
 | Still image after event | 1 s | |
 | Keep recordings | 7 days | Daily at 03:30, protected events are kept; 0 = forever |
 | RTSP transport | tcp | |

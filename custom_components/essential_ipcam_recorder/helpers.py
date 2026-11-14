@@ -53,27 +53,6 @@ def pick_label(
     return LABEL_MOTION
 
 
-def seconds_to_cut(
-    sensors: Iterable[SensorState],
-    start: float,
-    duration: float,
-    post_motion: float,
-) -> float:
-    """Seconds to cut from the end so the video ends `post_motion` after the last motion.
-
-    The last motion ends when the last sensor switched off. If any sensor is still
-    on, motion is ongoing and nothing is cut.
-    """
-    if post_motion <= 0:
-        return 0.0
-    last_off = start
-    for state in sensors:
-        if state.is_on:
-            return 0.0
-        last_off = max(last_off, state.last_changed)
-    return round(max(duration - (last_off + post_motion - start), 0.0), 1)
-
-
 def folder_to_media_id(folder: str, media_dirs: Mapping[str, str]) -> str | None:
     """Return the media-source id of a folder inside a configured media dir."""
     folder = os.path.normpath(folder)
@@ -178,7 +157,7 @@ EVENT_FILE_RE = re.compile(
     r"^(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_(\[(PERSON|PET|MOTION)\]|person|pet|motion)\.(jpg|mp4)$"
 )
 # Temp files of a recording in the camera folder: ~<time>_<camera>.mp4 / .jpg,
-# plus .tmp (written by the stream) and .cut.mp4 (trimming)
+# plus .tmp (written by the stream); .cut.mp4 were trim files up to 1.4.x, still cleaned
 TEMP_FILE_RE = re.compile(
     r"^~\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_[a-z0-9_]+\.(mp4|jpg)(\.tmp|\.cut\.mp4)?$"
 )
