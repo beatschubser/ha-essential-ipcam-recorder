@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 DOMAIN = "essential_ipcam_recorder"
 
 CONF_CAMERA = "camera_entity"
