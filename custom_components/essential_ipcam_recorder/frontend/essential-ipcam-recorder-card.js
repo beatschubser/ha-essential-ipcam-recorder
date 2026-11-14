@@ -27,6 +27,7 @@ const KEC_DEFAULTS = {
   default_camera: "",
   favorites_folder: "Protected",
   show_delete: true,
+  show_download: true,
   play_in_hero: "always", // "always", "wide" (cards from hero_min_width on, else overlay), "never"
   hero_min_width: 600,
   sources: [],
@@ -52,6 +53,7 @@ const KEC_TEXT = {
     f_types: "Event types (label: name, icon, color)",
     back_to_latest: "Back to latest",
     del: "Delete", del_confirm: "Delete?", del_error: "Event could not be deleted", f_show_delete: "Show delete button (admins only)",
+    dl: "Download video", dl_error: "Download failed", f_show_download: "Show download button (large player)",
     f_play_in_hero: "Play list videos in the large player", f_hero_min_width: "Large player: minimum card width",
     hero_always: "Always", hero_wide: "On wide cards only", hero_never: "Never (overlay)",
   },
@@ -69,6 +71,7 @@ const KEC_TEXT = {
     f_types: "Eventtypen (Kennung: name, icon, color)",
     back_to_latest: "Zurück zum neuesten",
     del: "Löschen", del_confirm: "Löschen?", del_error: "Event konnte nicht gelöscht werden", f_show_delete: "Löschen-Knopf anzeigen (nur Admins)",
+    dl: "Video herunterladen", dl_error: "Download fehlgeschlagen", f_show_download: "Download-Knopf anzeigen (großer Player)",
     f_play_in_hero: "Videos der Liste im großen Player abspielen", f_hero_min_width: "Großer Player: Mindestbreite der Karte",
     hero_always: "Immer", hero_wide: "Nur auf breiten Karten", hero_never: "Nie (Overlay)",
   },
@@ -401,7 +404,13 @@ class KameraEventCard extends HTMLElement {
       }
       .loeschen.bestaetigen { background: var(--error-color, #db4437); padding: 0 10px 0 8px; }
       .loeschen[disabled] { opacity: 0.5; cursor: progress; }
-      .hero-wrap .loeschen { right: 12px; top: 12px; height: 40px; min-width: 40px; border-radius: 20px; --mdc-icon-size: 24px; }
+      .hero-knoepfe { position: absolute; right: 12px; top: 12px; z-index: 1; display: flex; gap: 8px; }
+      .hero-knoepfe .loeschen, .hero-knoepfe .download { position: static; height: 40px; min-width: 40px; border-radius: 20px; --mdc-icon-size: 24px; }
+      .download {
+        border: 0; background: rgba(0, 0, 0, 0.55); color: #fff; cursor: pointer; padding: 0;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .download[disabled] { opacity: 0.5; cursor: progress; }
       .zeile-wrap .loeschen { left: calc(12px + var(--kec-thumb-akt)); top: calc(var(--kec-abstand) / 2 + 4px); transform: translateX(-100%); }
     `;
     this._card = kecEl("ha-card");
@@ -636,6 +645,41 @@ class KameraEventCard extends HTMLElement {
     return btn;
   }
 
+  /* Buttons top right in the large player: download and delete. */
+  _heroKnoepfe(e) {
+    return kecEl("div", { class: "hero-knoepfe" }, [this._downloadKnopf(e), this._loeschKnopf(e)]);
+  }
+
+  _downloadKnopf(e) {
+    if (this._config.show_download === false || !e.video) return null;
+    const btn = kecEl("button", { class: "download", "aria-label": this._t("dl"), title: this._t("dl") }, [
+      kecEl("ha-icon", { icon: "mdi:download" }),
+    ]);
+    btn.addEventListener("click", async (ev) => {
+      ev.stopPropagation();
+      btn.disabled = true;
+      try {
+        const url = await this._url(e.video, true);
+        let name = decodeURIComponent(String(e.video).split("/").pop() || "video");
+        if (!/\.mp4$/i.test(name)) name += ".mp4";
+        const a = kecEl("a", { href: url, download: name });
+        a.style.display = "none";
+        this.shadowRoot.append(a);
+        a.click();
+        a.remove();
+      } catch (err) {
+        this.dispatchEvent(new CustomEvent("hass-notification", {
+          detail: { message: `${this._t("dl_error")}: ${err && err.message ? err.message : err}` },
+          bubbles: true,
+          composed: true,
+        }));
+      } finally {
+        btn.disabled = false;
+      }
+    });
+    return btn;
+  }
+
   _kannLoeschen(e) {
     return !!(
       this._config.show_delete !== false && !e.fav && this._hass.user && this._hass.user.is_admin &&
@@ -745,7 +789,7 @@ class KameraEventCard extends HTMLElement {
         this._typChip(typ),
       ]),
     ]);
-    const wrap = kecEl("div", { class: "hero-wrap" }, [medien, this._stern(e), this._loeschKnopf(e)]);
+    const wrap = kecEl("div", { class: "hero-wrap" }, [medien, this._stern(e), this._heroKnoepfe(e)]);
     this._heroEl.replaceChildren(wrap, info, kecEl("div", { class: "trenner" }));
   }
 
@@ -756,11 +800,8 @@ class KameraEventCard extends HTMLElement {
     const alt = this._heroEl.querySelector(".hero-wrap > .stern");
     const neu = this._stern(e);
     if (alt && neu) alt.replaceWith(neu);
-    const wrap = this._heroEl.querySelector(".hero-wrap");
-    const altLoeschen = wrap && wrap.querySelector(":scope > .loeschen");
-    const neuLoeschen = this._loeschKnopf(e);
-    if (altLoeschen) altLoeschen.remove();
-    if (wrap && neuLoeschen) wrap.append(neuLoeschen);
+    const knoepfe = this._heroEl.querySelector(".hero-wrap > .hero-knoepfe");
+    if (knoepfe) knoepfe.replaceWith(this._heroKnoepfe(e));
   }
 
   _imHeroAbspielen() {
@@ -901,6 +942,7 @@ const KEC_SCHEMA = [
   { name: "default_type", selector: { text: {} } },
   { name: "default_camera", selector: { text: {} } },
   { name: "show_delete", selector: { boolean: {} } },
+  { name: "show_download", selector: { boolean: {} } },
   { name: "play_in_hero", selector: { select: { mode: "dropdown", options: ["always", "wide", "never"] } } },
   { name: "hero_min_width", selector: { number: { min: 200, max: 2000, mode: "box", unit_of_measurement: "px" } } },
   { name: "favorites_folder", selector: { text: {} } },
