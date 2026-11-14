@@ -395,13 +395,16 @@ class KameraEventCard extends HTMLElement {
       }
       .stern.aktiv { color: #f5c542; }
       /* Hover/focus: the icon takes the color of its action (only on devices with a mouse) */
-      .stern, .loeschen, .download { transition: color 0.15s, background-color 0.15s; }
+      .stern, .loeschen, .download, .hero-play { transition: color 0.15s, background-color 0.15s; }
+      .hero-play:focus-visible { color: var(--primary-color); background: rgba(0, 0, 0, 0.8); }
       .stern:focus-visible { color: #f5c542; background: rgba(0, 0, 0, 0.8); }
       .download:focus-visible { color: var(--primary-color); background: rgba(0, 0, 0, 0.8); }
       .loeschen:not(.bestaetigen):focus-visible { color: var(--error-color, #db4437); background: rgba(0, 0, 0, 0.8); }
       @media (hover: hover) {
         .stern:not([disabled]):hover { color: #f5c542; background: rgba(0, 0, 0, 0.8); }
         .download:not([disabled]):hover { color: var(--primary-color); background: rgba(0, 0, 0, 0.8); }
+        /* the whole picture starts the video, so hovering it colors the play button too */
+        .hero-media:hover .hero-play { color: var(--primary-color); background: rgba(0, 0, 0, 0.8); }
         .loeschen:not([disabled]):not(.bestaetigen):hover { color: var(--error-color, #db4437); background: rgba(0, 0, 0, 0.8); }
       }
       .stern[disabled] { opacity: 0.5; cursor: progress; }
