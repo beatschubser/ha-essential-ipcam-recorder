@@ -31,11 +31,13 @@ from homeassistant.components.stream import (
     Stream,
     create_stream,
 )
+from homeassistant.components.stream.const import RECORDER_PROVIDER
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import (
+    async_call_later,
     async_track_state_change_event,
     async_track_time_change,
     async_track_time_interval,
@@ -59,6 +61,7 @@ from .const import (
     CONF_RETENTION_DAYS,
     CONF_RTSP_TRANSPORT,
     CONF_SNAPSHOT_OFFSET,
+    CONF_STOP_WHEN_QUIET,
     CONF_STREAM_URL,
     CONF_VIDEO_DURATION,
     CONF_WALLCLOCK,
@@ -289,11 +292,17 @@ class IpCamRecorder:
             )
             try:
                 stream = await self._async_get_stream()
-                await stream.async_record(
-                    temp, duration=duration, lookback=int(config[CONF_LOOKBACK])
-                )
+                stop_watch = self._watch_quiet(stream, start)
+                try:
+                    await stream.async_record(
+                        temp, duration=duration, lookback=int(config[CONF_LOOKBACK])
+                    )
+                finally:
+                    stop_watch()
             except HomeAssistantError as err:
                 _LOGGER.error("%s: recording failed: %s", self.name, err)
+            # real length: the recording may have been stopped early
+            recorded = min(time.time() - start, float(duration))
 
             label = pick_label(
                 kind,
@@ -314,7 +323,7 @@ class IpCamRecorder:
             has_image = False
             if has_video:
                 # Still image at the event moment, counted from the end (lookback varies)
-                from_end = max(duration - float(config[CONF_SNAPSHOT_OFFSET]), 1)
+                from_end = max(recorded - float(config[CONF_SNAPSHOT_OFFSET]), 1)
                 has_image = await self._async_ffmpeg(
                     ["-sseof", f"-{from_end}", "-i", temp, "-frames:v", "1", "-q:v", "2", temp_image],
                     temp_image,
@@ -324,7 +333,7 @@ class IpCamRecorder:
                 cut = seconds_to_cut(
                     self._states(self.all_sensors),
                     start,
-                    duration,
+                    recorded,
                     float(config[CONF_POST_MOTION]),
                 )
                 if cut > 1:
@@ -366,6 +375,59 @@ class IpCamRecorder:
             self._current_temp = None
             self.recording = False
             self._notify()
+
+    def _watch_quiet(self, stream: Stream, start: float) -> Callable[[], None]:
+        """Stop the recording `post_motion` seconds after the last sensor went off.
+
+        Any sensor of the camera (person, pet or motion) keeps the recording going;
+        the video length option is the upper limit. Returns a function that ends
+        the watch.
+        """
+        post = float(self.config[CONF_POST_MOTION])
+        if not self.config.get(CONF_STOP_WHEN_QUIET) or post <= 0:
+            return lambda: None
+        timer: Callable[[], None] | None = None
+        done = False
+
+        async def _stop(_now: Any = None) -> None:
+            nonlocal timer
+            timer = None
+            if done:
+                return
+            recorder = stream.outputs().get(RECORDER_PROVIDER)
+            if recorder is None:  # recording not started yet (lookback): try again
+                timer = async_call_later(self.hass, 1, _stop)
+                return
+            _LOGGER.debug("%s: no event for %ss, stopping recording", self.name, post)
+            # same as Home Assistant's own end of a recording (idle timeout)
+            await stream.remove_provider(recorder)
+
+        @callback
+        def _check(_event: Any = None) -> None:
+            nonlocal timer
+            states = self._states(self.all_sensors)
+            if any(s.is_on for s in states):
+                if timer:
+                    timer()
+                    timer = None
+                return
+            if timer is None:
+                last_off = max([start, *(s.last_changed for s in states)])
+                # same clock as last_changed
+                delay = max(last_off + post - dt_util.utcnow().timestamp(), 0)
+                timer = async_call_later(self.hass, delay, _stop)
+
+        unsub = async_track_state_change_event(self.hass, self.all_sensors, _check)
+        _check()
+
+        def _end() -> None:
+            nonlocal done
+            done = True
+            unsub()
+            if timer:
+                timer()
+
+        return _end
 
     async def _async_ffmpeg(self, args: list[str], output: str) -> bool:
         binary = get_ffmpeg_manager(self.hass).binary

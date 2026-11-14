@@ -13,6 +13,7 @@ CONF_MOTION_SENSORS = "motion_sensors"
 CONF_VIDEO_DURATION = "video_duration"
 CONF_LOOKBACK = "lookback"
 CONF_POST_MOTION = "post_motion"
+CONF_STOP_WHEN_QUIET = "stop_when_quiet"
 CONF_SNAPSHOT_OFFSET = "snapshot_offset"
 CONF_RETENTION_DAYS = "retention_days"
 CONF_RTSP_TRANSPORT = "rtsp_transport"
@@ -28,6 +29,7 @@ DEFAULT_OPTIONS: dict[str, object] = {
     CONF_VIDEO_DURATION: 60,
     CONF_LOOKBACK: 3,
     CONF_POST_MOTION: 5,
+    CONF_STOP_WHEN_QUIET: True,
     CONF_SNAPSHOT_OFFSET: 1,
     CONF_RETENTION_DAYS: 7,
     CONF_RTSP_TRANSPORT: "tcp",

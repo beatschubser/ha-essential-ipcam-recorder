@@ -49,9 +49,10 @@ Stream URL: `rtsp://127.0.0.1:8554/garden_hd?video=all&audio=aac` with RTSP tran
 
 | Option | Default | |
 |---|---|---|
-| Maximum video length | 60 s | Camera is locked for new events meanwhile |
+| Maximum video length | 60 s | Upper limit; events during a recording go into the same clip |
 | Lookback | 3 s | Keeps a stream running; starts at the previous keyframe; 0 = off |
-| Keep after last motion | 5 s | 0 = never trim |
+| Keep after last motion | 5 s | 0 = full length, never trimmed |
+| Stop when quiet | on | Recording ends once no sensor was on for "keep after last motion" |
 | Still image after event | 1 s | |
 | Keep recordings | 7 days | Daily at 03:30, protected events are kept; 0 = forever |
 | RTSP transport | tcp | |

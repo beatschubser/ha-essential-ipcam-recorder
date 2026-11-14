@@ -29,6 +29,7 @@ from .const import (
     CONF_RETENTION_DAYS,
     CONF_RTSP_TRANSPORT,
     CONF_SNAPSHOT_OFFSET,
+    CONF_STOP_WHEN_QUIET,
     CONF_STREAM_URL,
     CONF_VIDEO_DURATION,
     CONF_WALLCLOCK,
@@ -74,6 +75,7 @@ def _option_fields(values: dict[str, Any]) -> dict[Any, Any]:
         vol.Required(CONF_VIDEO_DURATION, default=default(CONF_VIDEO_DURATION)): _number(5, 600, "s"),
         vol.Required(CONF_LOOKBACK, default=default(CONF_LOOKBACK)): _number(0, 10, "s"),
         vol.Required(CONF_POST_MOTION, default=default(CONF_POST_MOTION)): _number(0, 120, "s"),
+        vol.Required(CONF_STOP_WHEN_QUIET, default=default(CONF_STOP_WHEN_QUIET)): selector.BooleanSelector(),
         vol.Required(CONF_SNAPSHOT_OFFSET, default=default(CONF_SNAPSHOT_OFFSET)): _number(0, 30, "s"),
         vol.Required(CONF_RETENTION_DAYS, default=default(CONF_RETENTION_DAYS)): _number(0, 365, "d"),
         vol.Required(CONF_RTSP_TRANSPORT, default=default(CONF_RTSP_TRANSPORT)): selector.SelectSelector(

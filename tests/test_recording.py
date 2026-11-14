@@ -1,17 +1,19 @@
-import time
-
-import pytest
-from homeassistant.core import Context
-from homeassistant.exceptions import ServiceValidationError, Unauthorized
-
 """End to end: sensor fires, video and image land in the day folder."""
 
+import asyncio
 import os
+import time
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from homeassistant.core import HomeAssistant
-from homeassistant.setup import async_setup_component
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+import pytest
+from homeassistant.core import Context, HomeAssistant
+from homeassistant.exceptions import ServiceValidationError, Unauthorized
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
 
 from custom_components.essential_ipcam_recorder.const import DOMAIN, EVENT_SAVED
 
@@ -132,3 +134,84 @@ async def test_record_label_and_favorite(
     assert not os.path.exists(data["video_path"]) and not os.path.exists(data["image_path"])
 
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_stop_when_quiet(hass: HomeAssistant, tmp_path) -> None:
+    """The recording ends post_motion seconds after the last sensor went off."""
+    hass.config.media_dirs = {"local": str(tmp_path)}
+    hass.config.allowlist_external_dirs = {str(tmp_path)}
+    folder = tmp_path / "Garden"
+    stopped = asyncio.Event()
+    outputs: dict = {}
+    stream = MagicMock()
+    stream.outputs = lambda: outputs
+    stream.start = AsyncMock()
+    stream.stop = AsyncMock()
+
+    async def fake_record(path, duration, lookback):
+        outputs["recorder"] = recorder = MagicMock()
+        with open(path, "wb") as f:
+            f.write(b"video")
+        await stopped.wait()  # a real recording runs until it is stopped
+        assert "recorder" not in outputs or outputs.get("recorder") is not recorder
+
+    async def remove_provider(provider):
+        outputs.pop("recorder", None)
+        stopped.set()
+
+    stream.async_record = AsyncMock(side_effect=fake_record)
+    stream.remove_provider = AsyncMock(side_effect=remove_provider)
+
+    async def fake_ffmpeg(self, args, output):
+        with open(output, "wb") as f:
+            f.write(b"jpg")
+        return True
+
+    hass.states.async_set("binary_sensor.motion", "off")
+    hass.states.async_set("binary_sensor.pet", "off")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Garden",
+        data={"camera_entity": "camera.garden", "folder": str(folder)},
+        options={
+            "motion_sensors": ["binary_sensor.motion"],
+            "pet_sensors": ["binary_sensor.pet"],
+            "lookback": 0,
+            "post_motion": 5,
+            "video_duration": 300,
+        },
+    )
+    entry.add_to_hass(hass)
+    base = "custom_components.essential_ipcam_recorder"
+    with (
+        patch(f"{base}.recorder.create_stream", return_value=stream),
+        patch(f"{base}.recorder.async_get_stream_source", AsyncMock(return_value="rtsp://x")),
+        patch(f"{base}.recorder.IpCamRecorder._async_ffmpeg", fake_ffmpeg),
+        patch(f"{base}.add_extra_js_url"),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        hass.states.async_set("binary_sensor.motion", "on")
+        await hass.async_block_till_done()
+        for _ in range(100):  # the recording runs as a background task
+            if "recorder" in outputs:
+                break
+            await asyncio.sleep(0.01)
+        hass.states.async_set("binary_sensor.motion", "off")
+        hass.states.async_set("binary_sensor.pet", "on")  # another sensor keeps it going
+        await hass.async_block_till_done()
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=30))
+        await hass.async_block_till_done()
+        assert not stopped.is_set()
+        hass.states.async_set("binary_sensor.pet", "off")
+        await hass.async_block_till_done()
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=2))
+        await hass.async_block_till_done()
+        assert not stopped.is_set()  # post_motion not over yet
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=10))
+        await hass.async_block_till_done()
+        assert stopped.is_set()
+        await hass.async_block_till_done(wait_background_tasks=True)
+        assert entry.runtime_data.recording is False
+        assert entry.runtime_data.last_event["label"] == "PET"
+        assert await hass.config_entries.async_unload(entry.entry_id)
