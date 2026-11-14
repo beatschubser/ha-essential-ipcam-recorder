@@ -337,7 +337,7 @@ class KameraEventCard extends HTMLElement {
       }
       .hero-media img, .hero-media video { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
       .hero-play {
-        position: absolute; right: 12px; bottom: 12px; width: 56px; height: 56px; border-radius: 50%;
+        position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 56px; height: 56px; border-radius: 50%;
         border: 0; background: rgba(0, 0, 0, 0.6); color: #fff; cursor: pointer;
         display: flex; align-items: center; justify-content: center; --mdc-icon-size: 34px;
       }
